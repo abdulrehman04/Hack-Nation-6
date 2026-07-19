@@ -458,7 +458,9 @@ function StageSection({ index, title, locked, expanded, hint, onToggle, sectionR
       {locked ? (
         <p className="stage-hint muted">{hint}</p>
       ) : (
-        <div className="stage-body" hidden={!expanded}>{children}</div>
+        <div className={`stage-body-wrap${expanded ? ' open' : ''}`}>
+          <div className="stage-body">{children}</div>
+        </div>
       )}
     </div>
   )

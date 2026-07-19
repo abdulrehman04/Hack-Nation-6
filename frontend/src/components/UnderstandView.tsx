@@ -229,24 +229,15 @@ export default function UnderstandView({ profile, householdId, onContinue, onDis
             </form>
           </article>
 
-          <article className="understand-card">
-            <h3 className="doc-title">Citations</h3>
-            <div className="citation-chip-list">
-              {profile.citations.map((c, i) => (
-                <span key={i} className="citation-chip">{c.file_name} · {c.rule_id}</span>
-              ))}
-            </div>
-          </article>
+          <div className="stage-col-actions">
+            <button type="button" className="btn-secondary" onClick={onDiscover}>
+              Discover properties
+            </button>
+            <button type="button" className="btn-primary" onClick={onContinue}>
+              Continue to prepare packet
+            </button>
+          </div>
         </div>
-      </div>
-
-      <div className="review-actions understand-actions">
-        <button type="button" className="btn-secondary" onClick={onDiscover}>
-          Discover properties
-        </button>
-        <button type="button" className="btn-primary" onClick={onContinue}>
-          Continue to prepare packet
-        </button>
       </div>
     </section>
   )
