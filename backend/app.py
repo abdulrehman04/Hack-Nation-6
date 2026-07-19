@@ -108,6 +108,7 @@ class StoredDocument(BaseModel):
 
 
 class ConfirmedProfile(BaseModel):
+    household_id: str | None = None
     household: dict[str, Any] = {}
     documents: list[StoredDocument]
     sanity_issues: list[str] = []

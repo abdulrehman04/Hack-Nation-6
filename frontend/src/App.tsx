@@ -4,8 +4,8 @@ import AccountView from './components/AccountView'
 import UploadForm from './components/UploadForm'
 import ConfirmView from './components/ConfirmView'
 import UnderstandView from './components/UnderstandView'
-import { extractDocuments, fetchUnderstand } from './api'
-import { logOut, onAuth } from './firebase'
+import { extractDocuments, fetchUnderstand, listMyProfiles } from './api'
+import { getIdToken, logOut, onAuth } from './firebase'
 import type { Account } from './firebase'
 import type { Doc, EnrichedProfile } from './types'
 
@@ -32,14 +32,42 @@ export default function App() {
   const [understandLoading, setUnderstandLoading] = useState(false)
   const initialized = useRef(false)
 
-  // Track sign-in state. Only the first callback picks the initial landing;
-  // later changes (sign-up mid-flow, sign-out) are handled by explicit nav.
+  // Load the signed-in user's saved profile and open their dashboard.
+  async function enterDashboard() {
+    setUnderstandLoading(true)
+    setError(null)
+    try {
+      const token = await getIdToken()
+      const profiles = token ? await listMyProfiles(token) : []
+      const hhId = profiles.map((p) => p.household_id).find((id): id is string => !!id)
+      if (!hhId) {
+        setView('account') // signed in, but no dashboard data yet
+        return
+      }
+      const result = await fetchUnderstand(hhId)
+      setHouseholdId(hhId)
+      setEnrichedProfile(result)
+      setView('understand')
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e))
+      setView('account')
+    } finally {
+      setUnderstandLoading(false)
+      setReady(true)
+    }
+  }
+
+  // Track sign-in state. The first callback decides the landing screen.
   useEffect(() => onAuth((next) => {
     setAccount(next)
     if (!initialized.current) {
       initialized.current = true
-      setView(next ? 'account' : 'login')
-      setReady(true)
+      if (next) {
+        enterDashboard()
+      } else {
+        setView('login')
+        setReady(true)
+      }
     }
   }), [])
 
@@ -69,7 +97,7 @@ export default function App() {
     setView('login')
   }
 
-  // After the profile is saved to the account, load its rules/threshold view.
+  // After a new user saves and creates an account, open their dashboard.
   async function afterSaved(confirmedDocuments: Doc[]) {
     const hhId = confirmedDocuments
       .map((d) => householdIdFromFileName(d.file_name))
@@ -105,10 +133,16 @@ export default function App() {
         <div className="masthead-inner">
           <span className="brand-mark">RealDoor</span>
           <span className="brand-sub">Affordable Housing Application Readiness</span>
+          {account && (
+            <div className="masthead-account">
+              <span className="muted">{account.email}</span>
+              <button type="button" className="btn-secondary btn-sm" onClick={signOut}>Sign out</button>
+            </div>
+          )}
         </div>
       </header>
 
-      {inFlow && (
+      {inFlow && !understandLoading && (
         <nav className="steps" aria-label="Progress">
           <ol className="steps-list">
             {STEPS.map((label, i) => (
@@ -128,39 +162,40 @@ export default function App() {
       <main className="content">
         {!ready && <p className="status">Loading…</p>}
         {error && <p role="alert" className="notice notice-error">{error}</p>}
-        {understandLoading && <p role="status" className="notice">Loading rules and thresholds…</p>}
+        {ready && understandLoading && <p role="status" className="status">Loading your dashboard…</p>}
 
-        {ready && view === 'login' && (
-          <LoginPage
-            onLoggedIn={() => setView('account')}
-            onStartNew={() => setView('upload')}
-          />
-        )}
+        {ready && !understandLoading && (
+          <>
+            {view === 'login' && (
+              <LoginPage onLoggedIn={enterDashboard} onStartNew={() => setView('upload')} />
+            )}
 
-        {ready && view === 'account' && account && (
-          <AccountView account={account} onSignOut={signOut} />
-        )}
+            {view === 'account' && account && (
+              <AccountView account={account} onSignOut={signOut} />
+            )}
 
-        {ready && view === 'upload' && (
-          <UploadForm
-            documents={documents}
-            busy={busy}
-            onAddFiles={addFiles}
-            onRemove={removeDoc}
-            onContinue={() => setView('review')}
-          />
-        )}
+            {view === 'upload' && (
+              <UploadForm
+                documents={documents}
+                busy={busy}
+                onAddFiles={addFiles}
+                onRemove={removeDoc}
+                onContinue={() => setView('review')}
+              />
+            )}
 
-        {ready && view === 'review' && (
-          <ConfirmView
-            documents={documents}
-            onBack={() => setView('upload')}
-            onSaved={afterSaved}
-          />
-        )}
+            {view === 'review' && (
+              <ConfirmView
+                documents={documents}
+                onBack={() => setView('upload')}
+                onSaved={afterSaved}
+              />
+            )}
 
-        {ready && view === 'understand' && enrichedProfile && householdId && (
-          <UnderstandView profile={enrichedProfile} householdId={householdId} />
+            {view === 'understand' && enrichedProfile && householdId && (
+              <UnderstandView profile={enrichedProfile} householdId={householdId} />
+            )}
+          </>
         )}
       </main>
     </div>

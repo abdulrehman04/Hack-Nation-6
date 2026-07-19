@@ -32,6 +32,7 @@ export async function saveProfile(profile: unknown, idToken: string): Promise<{ 
 export interface ProfileSummary {
   profile_id: string
   created_at: string
+  household_id: string | null
   person_name: string | null
   document_count: number
 }

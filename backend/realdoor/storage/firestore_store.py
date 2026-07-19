@@ -114,6 +114,7 @@ class FirestoreProfileStore(ProfileStore):
                 "profile_id": record.get("profile_id"),
                 "created_at": record.get("created_at"),
                 "owner_uid": record.get("owner_uid"),
+                "household_id": record.get("household_id"),
                 "person_name": (record.get("household") or {}).get("person_name"),
                 "document_count": len(record.get("documents") or []),
             })

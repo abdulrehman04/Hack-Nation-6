@@ -8,6 +8,11 @@ import type { AuthedUser } from '../firebase'
 
 const HOUSEHOLD_FIELDS = ['person_name', 'household_size', 'address']
 
+function householdIdFromFileName(fileName: string): string | null {
+  const match = fileName.match(/^(hh-\d+)/i)
+  return match ? match[1].toUpperCase() : null
+}
+
 const REVIEW_THRESHOLD = 0.6
 const INJECTION_FIELD = 'untrusted_instruction_text'
 
@@ -151,7 +156,10 @@ export default function ConfirmView({ documents, onBack, onSaved }: Props) {
         if (HOUSEHOLD_FIELDS.includes(f.name)) household[f.name] = values[`${di}:${f.name}`] ?? ''
       })
     })
-    return { household, documents: docs, sanity_issues: issues }
+    const householdId = documents
+      .map((d) => householdIdFromFileName(d.file_name))
+      .find((id): id is string => id !== null) ?? null
+    return { household_id: householdId, household, documents: docs, sanity_issues: issues }
   }
 
   async function saveForUser(user: AuthedUser) {

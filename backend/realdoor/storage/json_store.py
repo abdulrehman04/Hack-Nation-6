@@ -54,6 +54,7 @@ class JsonProfileStore(ProfileStore):
             "profile_id": record["profile_id"],
             "created_at": record["created_at"],
             "owner_uid": record.get("owner_uid"),
+            "household_id": record.get("household_id"),
             "person_name": record.get("household", {}).get("person_name"),
             "document_count": len(record.get("documents", [])),
         })
