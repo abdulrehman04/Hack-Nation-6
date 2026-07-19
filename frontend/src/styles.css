@@ -548,3 +548,74 @@ h1, h2, h3 { font-family: var(--serif); font-weight: 600; letter-spacing: -0.01e
 .btn-danger { background: transparent; border: 1px solid var(--danger-border); color: var(--danger); }
 .btn-danger:hover:not(:disabled) { background: var(--danger-bg); border-color: var(--danger); }
 .confirm-row { display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap; margin-top: 0.6rem; }
+
+/* Discover (stretch): public property browsing */
+.discover-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; margin-bottom: 1.25rem; }
+.discover-head h2 { margin: 0 0 0.35rem; }
+.discover-layout { display: grid; grid-template-columns: 240px 1fr; gap: 1.5rem; align-items: start; }
+.discover-filters {
+  position: sticky; top: 1rem;
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 16px; padding: 1.25rem; box-shadow: var(--shadow);
+  display: flex; flex-direction: column; gap: 0.6rem;
+}
+.discover-filters .doc-title { margin: 0 0 0.35rem; }
+.filter-label { font-weight: 600; font-size: 0.85rem; margin-top: 0.5rem; }
+.discover-search, .discover-filters select {
+  width: 100%; padding: 0.55rem 0.7rem;
+  border: 1px solid var(--border-strong); border-radius: 10px;
+  background: var(--surface); color: var(--ink); font: inherit;
+}
+.discover-search:focus-visible, .discover-filters select:focus-visible { border-color: var(--accent); }
+.filter-checks { display: flex; flex-direction: column; gap: 0.4rem; }
+.filter-check { display: flex; align-items: center; gap: 0.5rem; font-size: 0.92rem; cursor: pointer; }
+.filter-check input { width: 16px; height: 16px; accent-color: var(--accent); }
+
+.discover-count { margin: 0 0 1rem; color: var(--muted); font-weight: 500; }
+.discover-grid {
+  list-style: none; margin: 0; padding: 0;
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 1rem;
+}
+.property-card {
+  width: 100%; text-align: left; cursor: pointer;
+  display: flex; flex-direction: column; gap: 0.35rem;
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 14px; padding: 1rem 1.1rem; box-shadow: var(--shadow);
+  transition: border-color 0.15s, box-shadow 0.15s, transform 0.15s;
+}
+.property-card:hover { border-color: var(--border-strong); box-shadow: var(--shadow-lift); transform: translateY(-1px); }
+.property-card:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.property-name { font-family: var(--serif); font-size: 1.1rem; font-weight: 600; }
+.property-loc { font-size: 0.9rem; }
+.property-beds { font-size: 0.9rem; color: var(--ink); }
+.availability-chip {
+  align-self: flex-start; font-size: 0.72rem; font-weight: 600; letter-spacing: 0.02em;
+  padding: 0.2rem 0.55rem; border-radius: 999px;
+  background: var(--info-bg); color: var(--info); border: 1px solid var(--info-border);
+}
+
+/* Detail popup */
+.discover-modal { max-width: 560px; }
+.discover-modal-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; }
+.discover-modal-head h2 { margin: 0 0 0.75rem; }
+.availability-banner {
+  display: flex; align-items: center; gap: 0.5rem;
+  background: var(--info-bg); color: var(--info); border: 1px solid var(--info-border);
+  border-radius: 10px; padding: 0.6rem 0.8rem; margin: 0 0 1rem; font-size: 0.9rem;
+}
+.availability-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--info); flex: none; }
+.discover-detail-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0.85rem 1.25rem; margin: 0; }
+.discover-detail-grid dt { font-size: 0.78rem; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.03em; }
+.discover-detail-grid dd { margin: 0.15rem 0 0; }
+.discover-flags {
+  margin: 1rem 0 0; padding: 0.6rem 0.8rem; font-size: 0.88rem;
+  background: var(--review-bg); color: var(--review); border: 1px solid var(--review-border); border-radius: 10px;
+}
+.discover-source { margin: 1rem 0 0; font-size: 0.85rem; color: var(--muted); }
+.discover-source a { color: var(--accent); }
+
+@media (max-width: 720px) {
+  .discover-layout { grid-template-columns: 1fr; }
+  .discover-filters { position: static; }
+  .discover-detail-grid { grid-template-columns: 1fr; }
+}

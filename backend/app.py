@@ -33,6 +33,7 @@ from realdoor.packet import delete_session as delete_household_session  # noqa: 
 from realdoor.packet import is_session_deleted  # noqa: E402
 from realdoor.storage import get_store  # noqa: E402
 from realdoor.storage.base import household_id_from_documents  # noqa: E402
+from realdoor.discover import AVAILABILITY_NOTICE, DATA_NOTICE, load_properties  # noqa: E402
 
 app = FastAPI(title="RealDoor extraction API")
 
@@ -318,3 +319,17 @@ def export(household_id: str, authorization: str | None = Header(None)) -> JSONR
 def delete_session_endpoint(household_id: str) -> dict:
     """Delete all session data for this household. Never touches other households or frozen data."""
     return delete_household_session(household_id)
+
+
+@app.get("/api/discover")
+def discover() -> dict:
+    """Return the full, unfiltered public LIHTC property set for renter-side browsing.
+
+    Public HUD data only — no household data involved, so no auth. The renter filters
+    client-side; the server never ranks, recommends, or claims availability.
+    """
+    return {
+        "properties": load_properties(),
+        "availability_notice": AVAILABILITY_NOTICE,
+        "data_notice": DATA_NOTICE,
+    }

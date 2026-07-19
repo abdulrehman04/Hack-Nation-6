@@ -2,6 +2,7 @@ import type {
   ChatMessage,
   ChatResponse,
   DeleteSessionResponse,
+  DiscoverData,
   EnrichedProfile,
   ExtractResponse,
   PrepareData,
@@ -130,6 +131,15 @@ export async function exportPacket(householdId: string, idToken: string): Promis
   a.click()
   document.body.removeChild(a)
   URL.revokeObjectURL(url)
+}
+
+// Stretch: fetch the full, unfiltered public LIHTC property set (public data, no auth).
+export async function fetchDiscover(): Promise<DiscoverData> {
+  const res = await fetch(`${API_BASE}/api/discover`)
+  if (!res.ok) {
+    throw new Error(`Discover failed (${res.status}): ${await res.text()}`)
+  }
+  return res.json()
 }
 
 // Renter-initiated deletion of all session data for this household.

@@ -51,9 +51,10 @@ interface Props {
   profile: EnrichedProfile
   householdId: string
   onContinue: () => void
+  onDiscover: () => void
 }
 
-export default function UnderstandView({ profile, householdId, onContinue }: Props) {
+export default function UnderstandView({ profile, householdId, onContinue, onDiscover }: Props) {
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
@@ -240,6 +241,9 @@ export default function UnderstandView({ profile, householdId, onContinue }: Pro
       </div>
 
       <div className="review-actions">
+        <button type="button" className="btn-secondary" onClick={onDiscover}>
+          Discover properties
+        </button>
         <button type="button" className="btn-primary" onClick={onContinue}>
           Continue to prepare packet
         </button>

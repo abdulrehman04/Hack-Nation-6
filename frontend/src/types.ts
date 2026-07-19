@@ -137,3 +137,39 @@ export interface DeleteSessionResponse {
   deleted_at: string
   items_deleted: string[]
 }
+
+// Stretch phase: /api/discover — public HUD LIHTC property browsing.
+
+export interface Property {
+  hud_id: string
+  project_name: string
+  address: string
+  city: string
+  state: string
+  zip: string
+  total_units: number | null
+  low_income_units: number | null
+  bedrooms: {
+    studio: number
+    one: number
+    two: number
+    three: number
+    four: number
+  }
+  year_placed_in_service: string
+  year_allocated: string
+  latitude: number | null
+  longitude: number | null
+  geocode_precision_code: string
+  cbsa_name: string
+  data_quality_flags: string[]
+  source_url: string
+  retrieved_utc: string
+  availability: 'unknown'
+}
+
+export interface DiscoverData {
+  properties: Property[]
+  availability_notice: string
+  data_notice: string
+}

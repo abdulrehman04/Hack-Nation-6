@@ -5,12 +5,20 @@ import UploadForm from './components/UploadForm'
 import ConfirmView from './components/ConfirmView'
 import UnderstandView from './components/UnderstandView'
 import PrepareView from './components/PrepareView'
-import { deleteMyData, extractDocuments, fetchPrepare, fetchUnderstand, listMyProfiles } from './api'
+import DiscoverView from './components/DiscoverView'
+import {
+  deleteMyData,
+  extractDocuments,
+  fetchDiscover,
+  fetchPrepare,
+  fetchUnderstand,
+  listMyProfiles,
+} from './api'
 import { getIdToken, logOut, onAuth } from './firebase'
 import type { Account } from './firebase'
-import type { AuditEvent, Doc, EnrichedProfile, PrepareData } from './types'
+import type { AuditEvent, Doc, DiscoverData, EnrichedProfile, PrepareData } from './types'
 
-type View = 'login' | 'upload' | 'review' | 'understand' | 'prepare' | 'account'
+type View = 'login' | 'upload' | 'review' | 'understand' | 'prepare' | 'account' | 'discover'
 
 const STEPS = ['Upload documents', 'Review & confirm', 'Understand & confirm', 'Prepare packet']
 
@@ -34,6 +42,8 @@ export default function App() {
   const [understandLoading, setUnderstandLoading] = useState(false)
   const [prepareData, setPrepareData] = useState<PrepareData | null>(null)
   const [prepareLoading, setPrepareLoading] = useState(false)
+  const [discoverData, setDiscoverData] = useState<DiscoverData | null>(null)
+  const [discoverLoading, setDiscoverLoading] = useState(false)
   const [showDelete, setShowDelete] = useState(false)
   const [deleting, setDeleting] = useState(false)
   const [deleteError, setDeleteError] = useState<string | null>(null)
@@ -209,9 +219,28 @@ export default function App() {
     }
   }
 
+  // Stretch: browse public LIHTC properties. Loaded lazily; no household data leaves the client.
+  async function onDiscover() {
+    setError(null)
+    if (discoverData) {
+      setView('discover')
+      return
+    }
+    setDiscoverLoading(true)
+    try {
+      const result = await fetchDiscover()
+      setDiscoverData(result)
+      setView('discover')
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e))
+    } finally {
+      setDiscoverLoading(false)
+    }
+  }
+
   const inFlow = view === 'upload' || view === 'review' || view === 'understand' || view === 'prepare'
   const stepIndex = view === 'upload' ? 0 : view === 'review' ? 1 : view === 'understand' ? 2 : 3
-  const anyLoading = understandLoading || prepareLoading
+  const anyLoading = understandLoading || prepareLoading || discoverLoading
 
   return (
     <div className="page">
@@ -261,6 +290,7 @@ export default function App() {
         {error && <p role="alert" className="notice notice-error">{error}</p>}
         {ready && understandLoading && <p role="status" className="status">Loading your dashboard…</p>}
         {ready && prepareLoading && <p role="status" className="status">Loading your packet…</p>}
+        {ready && discoverLoading && <p role="status" className="status">Loading properties…</p>}
 
         {ready && !anyLoading && (
           <>
@@ -296,7 +326,12 @@ export default function App() {
                 profile={enrichedProfile}
                 householdId={householdId}
                 onContinue={onContinueToPrepare}
+                onDiscover={onDiscover}
               />
+            )}
+
+            {view === 'discover' && discoverData && (
+              <DiscoverView data={discoverData} onBack={() => setView('understand')} />
             )}
 
             {view === 'prepare' && prepareData && householdId && (
