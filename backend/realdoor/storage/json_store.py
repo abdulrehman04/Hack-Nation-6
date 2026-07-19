@@ -12,7 +12,7 @@ import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 
-from .base import ProfileStore
+from .base import ProfileStore, household_id_from_documents
 
 
 class JsonProfileStore(ProfileStore):
@@ -54,7 +54,7 @@ class JsonProfileStore(ProfileStore):
             "profile_id": record["profile_id"],
             "created_at": record["created_at"],
             "owner_uid": record.get("owner_uid"),
-            "household_id": record.get("household_id"),
+            "household_id": record.get("household_id") or household_id_from_documents(record.get("documents")),
             "person_name": record.get("household", {}).get("person_name"),
             "document_count": len(record.get("documents", [])),
         })

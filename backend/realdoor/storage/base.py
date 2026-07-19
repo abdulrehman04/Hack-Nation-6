@@ -6,7 +6,17 @@ the callers. Records are plain dicts so no storage backend leaks into the API.
 
 from __future__ import annotations
 
+import re
 from abc import ABC, abstractmethod
+
+
+def household_id_from_documents(documents: list | None) -> str | None:
+    """Derive an hh-XXX household id from document file names (uppercased)."""
+    for doc in documents or []:
+        match = re.match(r"(hh-\d+)", str(doc.get("file_name") or ""), re.IGNORECASE)
+        if match:
+            return match.group(1).upper()
+    return None
 
 
 class ProfileStore(ABC):

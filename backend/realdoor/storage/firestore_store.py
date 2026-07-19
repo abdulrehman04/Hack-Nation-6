@@ -13,7 +13,7 @@ import urllib.request
 import uuid
 from datetime import datetime, timezone
 
-from .base import ProfileStore
+from .base import ProfileStore, household_id_from_documents
 
 _BASE = "https://firestore.googleapis.com/v1"
 
@@ -114,7 +114,7 @@ class FirestoreProfileStore(ProfileStore):
                 "profile_id": record.get("profile_id"),
                 "created_at": record.get("created_at"),
                 "owner_uid": record.get("owner_uid"),
-                "household_id": record.get("household_id"),
+                "household_id": record.get("household_id") or household_id_from_documents(record.get("documents")),
                 "person_name": (record.get("household") or {}).get("person_name"),
                 "document_count": len(record.get("documents") or []),
             })
