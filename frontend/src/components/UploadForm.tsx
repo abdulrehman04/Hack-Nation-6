@@ -1,72 +1,132 @@
 import { useState } from 'react'
-import type { FormEvent } from 'react'
-import type { UploadItem } from '../types'
+import type { DragEvent } from 'react'
+import type { Doc } from '../types'
 
-interface Props {
-  onSubmit: (items: UploadItem[]) => void
+const LABELS: Record<string, string> = {
+  application_summary: 'Application Summary',
+  pay_stub: 'Pay Stub',
+  employment_letter: 'Employment Letter',
+  benefit_letter: 'Benefit Letter',
+  gig_statement: 'Gig Statement',
 }
 
-// Three upload slots that map straight to document types.
-export default function UploadForm({ onSubmit }: Props) {
-  const [appSummary, setAppSummary] = useState<File | null>(null)
-  const [payStubs, setPayStubs] = useState<File[]>([])
-  const [employment, setEmployment] = useState<File | null>(null)
+interface Props {
+  documents: Doc[]
+  busy: boolean
+  onAddFiles: (files: File[]) => void
+  onRemove: (index: number) => void
+  onContinue: () => void
+}
 
-  const items: UploadItem[] = [
-    ...(appSummary ? [{ file: appSummary, type: 'application_summary' }] : []),
-    ...payStubs.map((file) => ({ file, type: 'pay_stub' })),
-    ...(employment ? [{ file: employment, type: 'employment_letter' }] : []),
-  ]
+function UploadIcon() {
+  return (
+    <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M12 16V4" />
+      <path d="m7 9 5-5 5 5" />
+      <path d="M5 20h14" />
+    </svg>
+  )
+}
 
-  function submit(e: FormEvent) {
+function DocIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z" />
+      <path d="M14 3v5h5" />
+    </svg>
+  )
+}
+
+function XIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      strokeWidth="2" strokeLinecap="round" aria-hidden="true">
+      <path d="M18 6 6 18M6 6l12 12" />
+    </svg>
+  )
+}
+
+export default function UploadForm({ documents, busy, onAddFiles, onRemove, onContinue }: Props) {
+  const [drag, setDrag] = useState(false)
+
+  function onDrop(e: DragEvent) {
     e.preventDefault()
-    if (items.length) onSubmit(items)
+    setDrag(false)
+    onAddFiles(Array.from(e.dataTransfer.files))
   }
 
   return (
-    <form onSubmit={submit} className="card">
-      <fieldset>
-        <legend>Upload your documents</legend>
+    <div className="upload">
+      <label
+        htmlFor="upload-input"
+        className={`dropzone ${drag ? 'dropzone-drag' : ''}`}
+        onDragOver={(e) => { e.preventDefault(); setDrag(true) }}
+        onDragLeave={() => setDrag(false)}
+        onDrop={onDrop}
+      >
+        <span className="slot-icon"><UploadIcon /></span>
+        <span className="slot-title">Upload your documents</span>
+        <span className="slot-hint">Drop PDFs here, or click to choose. We identify each one for you.</span>
+        <span className="slot-action">Application summary, pay stubs, employment letter, and more</span>
+        <input
+          id="upload-input"
+          type="file"
+          accept="application/pdf"
+          multiple
+          className="visually-hidden"
+          onChange={(e) => { onAddFiles(Array.from(e.target.files ?? [])); e.target.value = '' }}
+        />
+      </label>
 
-        <div className="field">
-          <label htmlFor="app-summary">Application summary (PDF)</label>
-          <input
-            id="app-summary"
-            type="file"
-            accept="application/pdf"
-            onChange={(e) => setAppSummary(e.target.files?.[0] ?? null)}
-          />
-        </div>
+      <section className="uploaded" aria-label="Uploaded documents">
+        <h2 className="uploaded-title">
+          Documents <span className="muted">({documents.length})</span>
+          {busy && <span className="muted"> · reading…</span>}
+        </h2>
 
-        <div className="field">
-          <label htmlFor="pay-stubs">Pay stubs (one or more PDFs)</label>
-          <input
-            id="pay-stubs"
-            type="file"
-            accept="application/pdf"
-            multiple
-            onChange={(e) => setPayStubs(Array.from(e.target.files ?? []))}
-          />
-        </div>
+        {documents.length === 0 && !busy ? (
+          <p className="empty">Nothing yet. Upload one or more PDFs above.</p>
+        ) : (
+          <ul className="file-list">
+            {documents.map((d, i) => {
+              const known = d.document_type ? LABELS[d.document_type] : undefined
+              return (
+                <li key={`${d.file_name}-${i}`} className="file-item">
+                  <span className="file-icon"><DocIcon /></span>
+                  <span className="file-name">{d.file_name}</span>
+                  <span className={known ? 'file-type' : 'file-type file-type-unknown'}>
+                    {known ?? 'Unrecognized'}
+                  </span>
+                  <button
+                    type="button"
+                    className="file-remove"
+                    onClick={() => onRemove(i)}
+                    aria-label={`Remove ${d.file_name}`}
+                  >
+                    <XIcon />
+                  </button>
+                </li>
+              )
+            })}
+            {busy && (
+              <li className="file-item file-item-busy" aria-live="polite">
+                <span className="muted">Reading and identifying…</span>
+              </li>
+            )}
+          </ul>
+        )}
+      </section>
 
-        <div className="field">
-          <label htmlFor="employment">Employment letter (PDF)</label>
-          <input
-            id="employment"
-            type="file"
-            accept="application/pdf"
-            onChange={(e) => setEmployment(e.target.files?.[0] ?? null)}
-          />
-        </div>
-      </fieldset>
-
-      <p className="hint" aria-live="polite">
-        {items.length} file{items.length === 1 ? '' : 's'} selected
-      </p>
-
-      <button type="submit" disabled={items.length === 0}>
-        Read documents
+      <button
+        type="button"
+        className="read-btn"
+        disabled={documents.length === 0 || busy}
+        onClick={onContinue}
+      >
+        Continue to confirm
       </button>
-    </form>
+    </div>
   )
 }

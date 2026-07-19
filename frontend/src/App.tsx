@@ -2,26 +2,33 @@ import { useState } from 'react'
 import UploadForm from './components/UploadForm'
 import ConfirmView from './components/ConfirmView'
 import { extractDocuments } from './api'
-import type { Doc, UploadItem } from './types'
+import type { Doc } from './types'
 
-type Stage = 'upload' | 'loading' | 'confirm'
+type Stage = 'upload' | 'confirm'
 
 export default function App() {
   const [stage, setStage] = useState<Stage>('upload')
   const [documents, setDocuments] = useState<Doc[]>([])
+  const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  async function handleSubmit(items: UploadItem[]) {
+  // Files are read (and their type detected) as soon as they are added.
+  async function addFiles(files: File[]) {
+    if (files.length === 0) return
     setError(null)
-    setStage('loading')
+    setBusy(true)
     try {
-      const res = await extractDocuments(items)
-      setDocuments(res.documents)
-      setStage('confirm')
+      const res = await extractDocuments(files)
+      setDocuments((prev) => [...prev, ...res.documents])
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
-      setStage('upload')
+    } finally {
+      setBusy(false)
     }
+  }
+
+  function remove(index: number) {
+    setDocuments((prev) => prev.filter((_, i) => i !== index))
   }
 
   return (
@@ -31,14 +38,16 @@ export default function App() {
         <p className="tagline">Application readiness. You confirm; a qualified person decides.</p>
       </header>
 
-      {error && (
-        <p role="alert" className="banner banner-error">{error}</p>
-      )}
+      {error && <p role="alert" className="banner banner-error">{error}</p>}
 
-      {stage === 'upload' && <UploadForm onSubmit={handleSubmit} />}
-
-      {stage === 'loading' && (
-        <p role="status" aria-live="polite" className="status">Reading your documents…</p>
+      {stage === 'upload' && (
+        <UploadForm
+          documents={documents}
+          busy={busy}
+          onAddFiles={addFiles}
+          onRemove={remove}
+          onContinue={() => setStage('confirm')}
+        />
       )}
 
       {stage === 'confirm' && (

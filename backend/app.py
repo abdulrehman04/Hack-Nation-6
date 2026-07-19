@@ -12,10 +12,11 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from fastapi import FastAPI, File, Form, HTTPException, UploadFile  # noqa: E402
+from fastapi import FastAPI, File, UploadFile  # noqa: E402
 from fastapi.middleware.cors import CORSMiddleware  # noqa: E402
 
 from realdoor.extraction.assembly import LABELS, assemble  # noqa: E402
+from realdoor.extraction.classify import detect_document_type  # noqa: E402
 from realdoor.extraction.readers import extract_bytes  # noqa: E402
 
 app = FastAPI(title="RealDoor extraction API")
@@ -44,6 +45,7 @@ def _serialize(assembled) -> dict:
                 "name": f.name,
                 "value": f.value,
                 "confidence": f.confidence,
+                "source_method": f.source_method,
                 "source_bbox": f.source_bbox,
                 "status": f.status,
                 "reason": f.reason,
@@ -54,21 +56,24 @@ def _serialize(assembled) -> dict:
 
 
 @app.post("/extract")
-async def extract(
-    files: list[UploadFile] = File(...),
-    document_types: list[str] = Form(...),
-) -> dict:
-    """Read each uploaded document and return its assembled fields."""
-    if len(files) != len(document_types):
-        raise HTTPException(400, "files and document_types must line up")
-
+async def extract(files: list[UploadFile] = File(...)) -> dict:
+    """Read each uploaded document, detect its type, and assemble its fields."""
     documents = []
-    for upload, doc_type in zip(files, document_types):
-        if doc_type not in LABELS:
-            raise HTTPException(400, f"unknown document_type: {doc_type}")
+    for upload in files:
         data = await upload.read()
-        extracted = extract_bytes(data, upload.filename or doc_type)
+        extracted = extract_bytes(data, upload.filename or "document.pdf")
+        doc_type = detect_document_type(extracted)
+        if doc_type is None:
+            documents.append({
+                "file_name": upload.filename,
+                "document_type": None,
+                "detected": False,
+                "method": extracted.method,
+                "injected_instruction": None,
+                "fields": [],
+            })
+            continue
         assembled = assemble(extracted, doc_type)
-        documents.append({"file_name": upload.filename, **_serialize(assembled)})
+        documents.append({"file_name": upload.filename, "detected": True, **_serialize(assembled)})
 
     return {"documents": documents}

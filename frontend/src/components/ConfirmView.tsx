@@ -42,6 +42,14 @@ function needsReview(field: Field): boolean {
   return field.status !== 'extracted' || field.confidence < REVIEW_THRESHOLD
 }
 
+// Text-layer values are read exactly; only OCR carries a real sub-100% score.
+function provenance(field: Field): string {
+  if (field.source_method === 'ocr') {
+    return `Scanned, ${Math.round(field.confidence * 100)}% match`
+  }
+  return 'From document text'
+}
+
 interface Props {
   documents: Doc[]
   onBack: () => void
@@ -76,12 +84,22 @@ export default function ConfirmView({ documents, onBack }: Props) {
 
       {documents.map((doc, di) => {
         const injection = doc.fields.find((f) => f.name === INJECTION_FIELD)
+        const typeLabel = doc.document_type ? label(DOC_LABELS, doc.document_type) : 'Unrecognized document'
+        const visibleFields = doc.fields.filter((f) => f.name !== INJECTION_FIELD)
         return (
           <article key={di} className="doc-card">
             <h3>
-              {label(DOC_LABELS, doc.document_type)}{' '}
-              <span className="method">read by {doc.method === 'ocr' ? 'OCR' : 'text layer'}</span>
+              {typeLabel}{' '}
+              <span className="method">
+                {doc.file_name} · read by {doc.method === 'ocr' ? 'OCR' : 'text layer'}
+              </span>
             </h3>
+
+            {!doc.document_type && (
+              <p role="alert" className="banner banner-warn">
+                We could not identify this document type. Please check the file.
+              </p>
+            )}
 
             {injection && (
               <p role="alert" className="banner banner-warn">
@@ -90,9 +108,7 @@ export default function ConfirmView({ documents, onBack }: Props) {
             )}
 
             <dl className="fields">
-              {doc.fields
-                .filter((f) => f.name !== INJECTION_FIELD)
-                .map((f) => {
+              {visibleFields.map((f) => {
                   const key = `${di}:${f.name}`
                   const review = needsReview(f)
                   const inputId = `field-${key}`
@@ -110,7 +126,7 @@ export default function ConfirmView({ documents, onBack }: Props) {
                           aria-describedby={`${inputId}-meta`}
                         />
                         <span id={`${inputId}-meta`} className="meta">
-                          <span className="conf">{Math.round(f.confidence * 100)}% confident</span>
+                          <span className="conf">{provenance(f)}</span>
                           {review && <span className="badge badge-review">Needs review</span>}
                         </span>
                       </dd>

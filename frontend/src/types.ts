@@ -4,6 +4,7 @@ export interface Field {
   name: string
   value: string | number | null
   confidence: number
+  source_method: string | null
   source_bbox: number[] | null
   status: string
   reason: string | null
@@ -11,7 +12,8 @@ export interface Field {
 
 export interface Doc {
   file_name: string
-  document_type: string
+  document_type: string | null
+  detected: boolean
   method: string
   injected_instruction: string | null
   fields: Field[]
@@ -19,9 +21,4 @@ export interface Doc {
 
 export interface ExtractResponse {
   documents: Doc[]
-}
-
-export interface UploadItem {
-  file: File
-  type: string
 }
