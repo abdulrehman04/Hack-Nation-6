@@ -1,0 +1,6 @@
+# Runtime dependencies. Also requires the system binary: tesseract (OCR engine).
+#   macOS:  brew install tesseract
+#   Debian: apt-get install tesseract-ocr
+PyMuPDF>=1.24
+pytesseract>=0.3.13
+Pillow>=10.0
