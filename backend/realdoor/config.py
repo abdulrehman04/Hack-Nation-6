@@ -28,6 +28,9 @@ SCHEMAS_ROOT = REPO_ROOT / "schemas"
 SUBMISSION_SCHEMA = SCHEMAS_ROOT / "submission.schema.json"
 DOCUMENT_GOLD_SCHEMA = SCHEMAS_ROOT / "document_gold.schema.json"
 
+# Where confirmed profiles are persisted (file-backed store; swap in config).
+STORE_DIR = REPO_ROOT / "out" / "store"
+
 
 def data_available() -> bool:
     """True when the vendored challenge data can be found."""

@@ -12,3 +12,16 @@ export async function extractDocuments(files: File[]): Promise<ExtractResponse> 
   }
   return res.json()
 }
+
+// Persist a renter-confirmed profile; returns the stored id.
+export async function saveProfile(profile: unknown): Promise<{ profile_id: string }> {
+  const res = await fetch(`${API_BASE}/profiles`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(profile),
+  })
+  if (!res.ok) {
+    throw new Error(`Save failed (${res.status}): ${await res.text()}`)
+  }
+  return res.json()
+}

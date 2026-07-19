@@ -12,12 +12,16 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from fastapi import FastAPI, File, UploadFile  # noqa: E402
+from typing import Any  # noqa: E402
+
+from fastapi import FastAPI, File, HTTPException, UploadFile  # noqa: E402
 from fastapi.middleware.cors import CORSMiddleware  # noqa: E402
+from pydantic import BaseModel  # noqa: E402
 
 from realdoor.extraction.assembly import LABELS, assemble  # noqa: E402
 from realdoor.extraction.classify import detect_document_type  # noqa: E402
 from realdoor.extraction.readers import extract_bytes, render_first_page  # noqa: E402
+from realdoor.storage import get_store  # noqa: E402
 
 app = FastAPI(title="RealDoor extraction API")
 
@@ -83,3 +87,44 @@ async def extract(files: list[UploadFile] = File(...)) -> dict:
         documents.append({**base, "detected": True, **_serialize(assembled)})
 
     return {"documents": documents}
+
+
+class StoredField(BaseModel):
+    name: str
+    value: Any = None
+    confidence: float | None = None
+    source_method: str | None = None
+    reviewed: bool = True
+
+
+class StoredDocument(BaseModel):
+    document_type: str | None = None
+    file_name: str | None = None
+    method: str
+    fields: list[StoredField]
+
+
+class ConfirmedProfile(BaseModel):
+    household: dict[str, Any] = {}
+    documents: list[StoredDocument]
+    sanity_issues: list[str] = []
+
+
+@app.post("/profiles")
+def create_profile(profile: ConfirmedProfile) -> dict:
+    """Persist a renter-confirmed profile and return its id."""
+    profile_id = get_store().save(profile.model_dump())
+    return {"profile_id": profile_id, "saved": True}
+
+
+@app.get("/profiles")
+def list_profiles() -> dict:
+    return {"profiles": get_store().list_summaries()}
+
+
+@app.get("/profiles/{profile_id}")
+def read_profile(profile_id: str) -> dict:
+    record = get_store().get(profile_id)
+    if record is None:
+        raise HTTPException(404, "profile not found")
+    return record

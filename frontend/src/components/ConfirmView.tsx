@@ -2,6 +2,9 @@ import { useMemo, useState } from 'react'
 import type { CSSProperties } from 'react'
 import type { Doc, Field } from '../types'
 import { runSanityChecks } from '../sanity'
+import { saveProfile } from '../api'
+
+const HOUSEHOLD_FIELDS = ['person_name', 'household_size', 'address']
 
 const REVIEW_THRESHOLD = 0.6
 const INJECTION_FIELD = 'untrusted_instruction_text'
@@ -104,6 +107,8 @@ export default function ConfirmView({ documents, onBack }: Props) {
   const [confirmed, setConfirmed] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [activeKey, setActiveKey] = useState<string | null>(null)
+  const [saving, setSaving] = useState(false)
+  const [savedId, setSavedId] = useState<string | null>(null)
 
   const edited = useMemo(
     () => Object.keys(original).some((k) => values[k] !== original[k]),
@@ -115,8 +120,49 @@ export default function ConfirmView({ documents, onBack }: Props) {
   function resetGate() {
     setChecked(false)
     setConfirmed(false)
+    setSavedId(null)
     setIssues([])
     setError(null)
+  }
+
+  function buildProfile() {
+    const docs = documents.map((doc, di) => ({
+      document_type: doc.document_type,
+      file_name: doc.file_name,
+      method: doc.method,
+      fields: doc.fields
+        .filter((f) => f.name !== INJECTION_FIELD)
+        .map((f) => {
+          const key = `${di}:${f.name}`
+          return {
+            name: f.name,
+            value: values[key] ?? null,
+            confidence: f.confidence,
+            source_method: f.source_method,
+            reviewed: needsReview(f) ? !!reviewed[key] : true,
+          }
+        }),
+    }))
+    const household: Record<string, string> = {}
+    documents.forEach((doc, di) => {
+      doc.fields.forEach((f) => {
+        if (HOUSEHOLD_FIELDS.includes(f.name)) household[f.name] = values[`${di}:${f.name}`] ?? ''
+      })
+    })
+    return { household, documents: docs, sanity_issues: issues }
+  }
+
+  async function finalize() {
+    setSaving(true)
+    try {
+      const { profile_id } = await saveProfile(buildProfile())
+      setSavedId(profile_id)
+      setConfirmed(true)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e))
+    } finally {
+      setSaving(false)
+    }
   }
 
   function setValue(key: string, value: string) {
@@ -137,22 +183,24 @@ export default function ConfirmView({ documents, onBack }: Props) {
     }
     setError(null)
     if (checked && issues.length > 0) {
-      setConfirmed(true) // second click: proceed despite the flagged issues
+      finalize() // second click: proceed despite the flagged issues
       return
     }
     const found = runSanityChecks(documents, values)
     setIssues(found)
     setChecked(true)
-    if (found.length === 0) setConfirmed(true)
+    if (found.length === 0) finalize()
   }
 
-  const primaryLabel = confirmed
-    ? 'Profile confirmed'
-    : checked && issues.length > 0
-      ? 'Confirm anyway'
-      : edited
-        ? 'Update value'
-        : 'Confirm profile'
+  const primaryLabel = saving
+    ? 'Saving…'
+    : confirmed
+      ? 'Profile confirmed'
+      : checked && issues.length > 0
+        ? 'Confirm anyway'
+        : edited
+          ? 'Update value'
+          : 'Confirm profile'
 
   return (
     <section className="review" aria-labelledby="review-heading">
@@ -289,16 +337,17 @@ export default function ConfirmView({ documents, onBack }: Props) {
       )}
 
       <div className="review-actions">
-        <button type="button" className="btn-secondary" onClick={onBack}>Back to upload</button>
-        <button type="button" className="btn-primary" onClick={handlePrimary} disabled={confirmed}>
+        <button type="button" className="btn-secondary" onClick={onBack} disabled={saving}>Back to upload</button>
+        <button type="button" className="btn-primary" onClick={handlePrimary} disabled={confirmed || saving}>
           {primaryLabel}
         </button>
       </div>
 
       {confirmed && (
         <p role="status" className="notice notice-ok">
-          <strong>Profile confirmed.</strong>{' '}
-          {issues.length > 0 ? 'Flagged items acknowledged. ' : ''}Ready for the rules check.
+          <strong>Profile confirmed and saved.</strong>{' '}
+          {issues.length > 0 ? 'Flagged items acknowledged. ' : ''}
+          {savedId ? `Reference: ${savedId}. ` : ''}Ready for the rules check.
         </p>
       )}
     </section>
