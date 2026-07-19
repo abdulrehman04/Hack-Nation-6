@@ -13,15 +13,37 @@ export async function extractDocuments(files: File[]): Promise<ExtractResponse> 
   return res.json()
 }
 
-// Persist a renter-confirmed profile; returns the stored id.
-export async function saveProfile(profile: unknown): Promise<{ profile_id: string }> {
+// Persist a renter-confirmed profile against the signed-in user.
+export async function saveProfile(profile: unknown, idToken: string): Promise<{ profile_id: string }> {
   const res = await fetch(`${API_BASE}/profiles`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${idToken}`,
+    },
     body: JSON.stringify(profile),
   })
   if (!res.ok) {
     throw new Error(`Save failed (${res.status}): ${await res.text()}`)
   }
   return res.json()
+}
+
+export interface ProfileSummary {
+  profile_id: string
+  created_at: string
+  person_name: string | null
+  document_count: number
+}
+
+// List the signed-in user's saved profiles.
+export async function listMyProfiles(idToken: string): Promise<ProfileSummary[]> {
+  const res = await fetch(`${API_BASE}/profiles`, {
+    headers: { Authorization: `Bearer ${idToken}` },
+  })
+  if (!res.ok) {
+    throw new Error(`Could not load profiles (${res.status})`)
+  }
+  const data = await res.json()
+  return data.profiles
 }

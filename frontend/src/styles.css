@@ -268,3 +268,56 @@ h1, h2, h3 { font-family: var(--serif); font-weight: 600; letter-spacing: -0.01e
 .issues-list li { margin: 0.2rem 0; }
 
 .review-actions { display: flex; gap: 0.75rem; margin-top: 1.75rem; }
+
+/* Auth modal */
+.modal-overlay {
+  position: fixed; inset: 0; z-index: 50;
+  display: grid; place-items: center; padding: 1.25rem;
+  background: rgba(20, 18, 15, 0.5);
+  backdrop-filter: blur(2px);
+}
+.modal {
+  width: 100%; max-width: 420px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  box-shadow: var(--shadow-lift);
+  padding: 1.75rem;
+}
+.modal h2 { margin: 0 0 0.35rem; font-size: 1.4rem; }
+.modal-lede { margin: 0 0 1.25rem; color: var(--muted); }
+.modal-lede strong { color: var(--accent); font-weight: 600; }
+.modal-field { margin-bottom: 1rem; }
+.modal-field label { display: block; font-weight: 600; margin-bottom: 0.35rem; }
+.modal-field input {
+  width: 100%; padding: 0.65rem 0.75rem;
+  border: 1px solid var(--border-strong); border-radius: 10px;
+  background: var(--surface); color: var(--ink); font: inherit;
+}
+.modal-field input:focus-visible { border-color: var(--accent); }
+.modal-actions { display: flex; justify-content: flex-end; gap: 0.6rem; margin-top: 1.25rem; }
+
+/* Login page */
+.auth-page { display: grid; place-items: center; padding: 2.5rem 0; }
+.auth-card { width: 100%; max-width: 420px; }
+.card {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 16px; box-shadow: var(--shadow); padding: 1.75rem;
+}
+.auth-card h2 { margin: 0 0 0.3rem; font-size: 1.5rem; }
+.auth-card .lede { margin: 0 0 1.35rem; }
+.auth-alt { margin: 1.1rem 0 0; text-align: center; color: var(--muted); font-size: 0.92rem; }
+.linklike {
+  background: none; border: none; padding: 0;
+  color: var(--accent); font: inherit; font-weight: 600; cursor: pointer;
+  text-decoration: underline; text-underline-offset: 2px;
+}
+
+/* Account view */
+.account-head {
+  display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+.account-head h2 { margin: 0; font-size: 1.6rem; }
+.account-head .lede { margin: 0.2rem 0 0; }
+.account-sub { margin: 0 0 0.75rem; font-size: 1.1rem; }

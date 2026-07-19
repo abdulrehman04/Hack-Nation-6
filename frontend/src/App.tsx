@@ -1,19 +1,36 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
+import LoginPage from './components/LoginPage'
+import AccountView from './components/AccountView'
 import UploadForm from './components/UploadForm'
 import ConfirmView from './components/ConfirmView'
 import { extractDocuments } from './api'
+import { logOut, onAuth } from './firebase'
+import type { Account } from './firebase'
 import type { Doc } from './types'
 
-type Stage = 'upload' | 'review'
+type View = 'login' | 'upload' | 'review' | 'account'
 
 const STEPS = ['Upload documents', 'Review & confirm', 'Prepare packet']
 
 export default function App() {
-  const [stage, setStage] = useState<Stage>('upload')
+  const [account, setAccount] = useState<Account | null>(null)
+  const [ready, setReady] = useState(false)
+  const [view, setView] = useState<View>('login')
   const [documents, setDocuments] = useState<Doc[]>([])
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const stepIndex = stage === 'upload' ? 0 : 1
+  const initialized = useRef(false)
+
+  // Track sign-in state. Only the first callback picks the initial landing;
+  // later changes (sign-up mid-flow, sign-out) are handled by explicit nav.
+  useEffect(() => onAuth((next) => {
+    setAccount(next)
+    if (!initialized.current) {
+      initialized.current = true
+      setView(next ? 'account' : 'login')
+      setReady(true)
+    }
+  }), [])
 
   async function addFiles(files: File[]) {
     if (files.length === 0) return
@@ -29,9 +46,17 @@ export default function App() {
     }
   }
 
-  function remove(index: number) {
+  function removeDoc(index: number) {
     setDocuments((prev) => prev.filter((_, i) => i !== index))
   }
+
+  async function signOut() {
+    await logOut()
+    setDocuments([])
+    setView('login')
+  }
+
+  const inFlow = view === 'upload' || view === 'review'
 
   return (
     <div className="page">
@@ -46,36 +71,59 @@ export default function App() {
         </div>
       </header>
 
-      <nav className="steps" aria-label="Progress">
-        <ol className="steps-list">
-          {STEPS.map((label, i) => (
-            <li
-              key={label}
-              className={`step${i === stepIndex ? ' step-current' : ''}${i < stepIndex ? ' step-done' : ''}`}
-              aria-current={i === stepIndex ? 'step' : undefined}
-            >
-              <span className="step-num">{i + 1}</span>
-              <span className="step-label">{label}</span>
-            </li>
-          ))}
-        </ol>
-      </nav>
+      {inFlow && (
+        <nav className="steps" aria-label="Progress">
+          <ol className="steps-list">
+            {STEPS.map((label, i) => {
+              const stepIndex = view === 'upload' ? 0 : 1
+              return (
+                <li
+                  key={label}
+                  className={`step${i === stepIndex ? ' step-current' : ''}${i < stepIndex ? ' step-done' : ''}`}
+                  aria-current={i === stepIndex ? 'step' : undefined}
+                >
+                  <span className="step-num">{i + 1}</span>
+                  <span className="step-label">{label}</span>
+                </li>
+              )
+            })}
+          </ol>
+        </nav>
+      )}
 
       <main className="content">
-        {error && <p role="alert" className="notice notice-error">{error}</p>}
+        {!ready && <p className="status">Loading…</p>}
 
-        {stage === 'upload' && (
-          <UploadForm
-            documents={documents}
-            busy={busy}
-            onAddFiles={addFiles}
-            onRemove={remove}
-            onContinue={() => setStage('review')}
+        {ready && view === 'login' && (
+          <LoginPage
+            onLoggedIn={() => setView('account')}
+            onStartNew={() => setView('upload')}
           />
         )}
 
-        {stage === 'review' && (
-          <ConfirmView documents={documents} onBack={() => setStage('upload')} />
+        {ready && view === 'account' && account && (
+          <AccountView account={account} onSignOut={signOut} />
+        )}
+
+        {ready && view === 'upload' && (
+          <>
+            {error && <p role="alert" className="notice notice-error">{error}</p>}
+            <UploadForm
+              documents={documents}
+              busy={busy}
+              onAddFiles={addFiles}
+              onRemove={removeDoc}
+              onContinue={() => setView('review')}
+            />
+          </>
+        )}
+
+        {ready && view === 'review' && (
+          <ConfirmView
+            documents={documents}
+            onBack={() => setView('upload')}
+            onSaved={() => setView('account')}
+          />
         )}
       </main>
     </div>

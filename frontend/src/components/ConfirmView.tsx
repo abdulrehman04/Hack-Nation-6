@@ -3,6 +3,8 @@ import type { CSSProperties } from 'react'
 import type { Doc, Field } from '../types'
 import { runSanityChecks } from '../sanity'
 import { saveProfile } from '../api'
+import AuthModal from './AuthModal'
+import type { AuthedUser } from '../firebase'
 
 const HOUSEHOLD_FIELDS = ['person_name', 'household_size', 'address']
 
@@ -77,9 +79,10 @@ function CheckIcon() {
 interface Props {
   documents: Doc[]
   onBack: () => void
+  onSaved: () => void
 }
 
-export default function ConfirmView({ documents, onBack }: Props) {
+export default function ConfirmView({ documents, onBack, onSaved }: Props) {
   const original = useMemo(() => {
     const o: Record<string, string> = {}
     documents.forEach((doc, di) => {
@@ -108,7 +111,7 @@ export default function ConfirmView({ documents, onBack }: Props) {
   const [error, setError] = useState<string | null>(null)
   const [activeKey, setActiveKey] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
-  const [savedId, setSavedId] = useState<string | null>(null)
+  const [showAuth, setShowAuth] = useState(false)
 
   const edited = useMemo(
     () => Object.keys(original).some((k) => values[k] !== original[k]),
@@ -120,7 +123,6 @@ export default function ConfirmView({ documents, onBack }: Props) {
   function resetGate() {
     setChecked(false)
     setConfirmed(false)
-    setSavedId(null)
     setIssues([])
     setError(null)
   }
@@ -152,12 +154,13 @@ export default function ConfirmView({ documents, onBack }: Props) {
     return { household, documents: docs, sanity_issues: issues }
   }
 
-  async function finalize() {
+  async function saveForUser(user: AuthedUser) {
+    setShowAuth(false)
     setSaving(true)
     try {
-      const { profile_id } = await saveProfile(buildProfile())
-      setSavedId(profile_id)
+      await saveProfile(buildProfile(), user.idToken)
       setConfirmed(true)
+      onSaved()
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
     } finally {
@@ -183,13 +186,13 @@ export default function ConfirmView({ documents, onBack }: Props) {
     }
     setError(null)
     if (checked && issues.length > 0) {
-      finalize() // second click: proceed despite the flagged issues
+      setShowAuth(true) // second click: proceed despite the flagged issues
       return
     }
     const found = runSanityChecks(documents, values)
     setIssues(found)
     setChecked(true)
-    if (found.length === 0) finalize()
+    if (found.length === 0) setShowAuth(true)
   }
 
   const primaryLabel = saving
@@ -345,10 +348,12 @@ export default function ConfirmView({ documents, onBack }: Props) {
 
       {confirmed && (
         <p role="status" className="notice notice-ok">
-          <strong>Profile confirmed and saved.</strong>{' '}
-          {issues.length > 0 ? 'Flagged items acknowledged. ' : ''}
-          {savedId ? `Reference: ${savedId}. ` : ''}Ready for the rules check.
+          <strong>Profile confirmed and saved.</strong>
         </p>
+      )}
+
+      {showAuth && (
+        <AuthModal onClose={() => setShowAuth(false)} onAuthenticated={saveForUser} />
       )}
     </section>
   )

@@ -14,10 +14,12 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from typing import Any  # noqa: E402
 
-from fastapi import FastAPI, File, HTTPException, UploadFile  # noqa: E402
+from fastapi import FastAPI, File, Header, HTTPException, UploadFile  # noqa: E402
 from fastapi.middleware.cors import CORSMiddleware  # noqa: E402
 from pydantic import BaseModel  # noqa: E402
 
+from realdoor import config  # noqa: E402
+from realdoor.auth import AuthError, verify_id_token  # noqa: E402
 from realdoor.extraction.assembly import LABELS, assemble  # noqa: E402
 from realdoor.extraction.classify import detect_document_type  # noqa: E402
 from realdoor.extraction.readers import extract_bytes, render_first_page  # noqa: E402
@@ -110,21 +112,42 @@ class ConfirmedProfile(BaseModel):
     sanity_issues: list[str] = []
 
 
+def _require_uid(authorization: str | None) -> str:
+    """Verify the bearer token and return the caller's uid, or 401."""
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(401, "sign in required")
+    id_token = authorization.split(" ", 1)[1]
+    try:
+        return verify_id_token(id_token, config.FIREBASE_API_KEY)
+    except AuthError as exc:
+        raise HTTPException(401, f"authentication failed: {exc}") from None
+
+
 @app.post("/profiles")
-def create_profile(profile: ConfirmedProfile) -> dict:
-    """Persist a renter-confirmed profile and return its id."""
-    profile_id = get_store().save(profile.model_dump())
+def create_profile(profile: ConfirmedProfile, authorization: str | None = Header(None)) -> dict:
+    """Persist a renter-confirmed profile against the signed-in user."""
+    uid = _require_uid(authorization)
+    record = profile.model_dump()
+    record["owner_uid"] = uid
+    try:
+        profile_id = get_store().save(record)
+    except Exception as exc:  # storage backend failed; surface it cleanly
+        raise HTTPException(502, f"Could not save profile: {exc}") from None
     return {"profile_id": profile_id, "saved": True}
 
 
 @app.get("/profiles")
-def list_profiles() -> dict:
-    return {"profiles": get_store().list_summaries()}
+def list_profiles(authorization: str | None = Header(None)) -> dict:
+    """List only the signed-in user's profiles."""
+    uid = _require_uid(authorization)
+    mine = [s for s in get_store().list_summaries() if s.get("owner_uid") == uid]
+    return {"profiles": mine}
 
 
 @app.get("/profiles/{profile_id}")
-def read_profile(profile_id: str) -> dict:
+def read_profile(profile_id: str, authorization: str | None = Header(None)) -> dict:
+    uid = _require_uid(authorization)
     record = get_store().get(profile_id)
-    if record is None:
+    if record is None or record.get("owner_uid") != uid:
         raise HTTPException(404, "profile not found")
     return record

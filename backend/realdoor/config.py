@@ -28,8 +28,14 @@ SCHEMAS_ROOT = REPO_ROOT / "schemas"
 SUBMISSION_SCHEMA = SCHEMAS_ROOT / "submission.schema.json"
 DOCUMENT_GOLD_SCHEMA = SCHEMAS_ROOT / "document_gold.schema.json"
 
-# Where confirmed profiles are persisted (file-backed store; swap in config).
-STORE_DIR = REPO_ROOT / "out" / "store"
+# Confirmed-profile storage. STORE_BACKEND selects the implementation.
+STORE_BACKEND = os.environ.get("STORE_BACKEND", "firestore")  # "firestore" | "json"
+STORE_DIR = REPO_ROOT / "out" / "store"  # used by the json backend
+
+# Firebase web config (public by design; access is governed by Firestore rules).
+FIREBASE_PROJECT_ID = os.environ.get("FIREBASE_PROJECT_ID", "hack-nation-6---realdoor")
+FIREBASE_API_KEY = os.environ.get(
+    "FIREBASE_API_KEY", "AIzaSyD298bLD4CRa87ghE-XOQFlSlpRKN5EphY")
 
 
 def data_available() -> bool:

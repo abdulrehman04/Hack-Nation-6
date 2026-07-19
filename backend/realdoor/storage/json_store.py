@@ -53,6 +53,7 @@ class JsonProfileStore(ProfileStore):
         summaries.append({
             "profile_id": record["profile_id"],
             "created_at": record["created_at"],
+            "owner_uid": record.get("owner_uid"),
             "person_name": record.get("household", {}).get("person_name"),
             "document_count": len(record.get("documents", [])),
         })
