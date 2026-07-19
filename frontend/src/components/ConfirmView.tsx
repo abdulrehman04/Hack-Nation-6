@@ -1,12 +1,16 @@
 import { useMemo, useState } from 'react'
 import type { CSSProperties } from 'react'
-import type { Doc, Field } from '../types'
+import type { AuditEvent, Doc, Field } from '../types'
 import { runSanityChecks } from '../sanity'
 import { saveProfile } from '../api'
 import AuthModal from './AuthModal'
 import type { AuthedUser } from '../firebase'
 
 const HOUSEHOLD_FIELDS = ['person_name', 'household_size', 'address']
+
+const CONSENT_TEXT =
+  'I consent to RealDoor reading these documents to prepare my application, '
+  + 'and I understand it does not decide my eligibility.'
 
 function householdIdFromFileName(fileName: string): string | null {
   const match = fileName.match(/^(hh-\d+)/i)
@@ -83,11 +87,12 @@ function CheckIcon() {
 
 interface Props {
   documents: Doc[]
+  audit: AuditEvent[]
   onBack: () => void
   onSaved: (documents: Doc[]) => void
 }
 
-export default function ConfirmView({ documents, onBack, onSaved }: Props) {
+export default function ConfirmView({ documents, audit, onBack, onSaved }: Props) {
   const original = useMemo(() => {
     const o: Record<string, string> = {}
     documents.forEach((doc, di) => {
@@ -117,6 +122,7 @@ export default function ConfirmView({ documents, onBack, onSaved }: Props) {
   const [activeKey, setActiveKey] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
   const [showAuth, setShowAuth] = useState(false)
+  const [consented, setConsented] = useState(false)
 
   const edited = useMemo(
     () => Object.keys(original).some((k) => values[k] !== original[k]),
@@ -159,7 +165,22 @@ export default function ConfirmView({ documents, onBack, onSaved }: Props) {
     const householdId = documents
       .map((d) => householdIdFromFileName(d.file_name))
       .find((id): id is string => id !== null) ?? null
-    return { household_id: householdId, household, documents: docs, sanity_issues: issues }
+
+    const now = new Date().toISOString()
+    const fieldLabel = (key: string) => labelOf(FIELD_LABELS, key.split(':')[1])
+    const auditLog: AuditEvent[] = [
+      ...audit,
+      ...Object.keys(original)
+        .filter((k) => values[k] !== original[k])
+        .map((k) => ({ action: 'corrected', detail: fieldLabel(k), at: now })),
+      ...reviewKeys
+        .filter((k) => reviewed[k])
+        .map((k) => ({ action: 'reviewed', detail: fieldLabel(k), at: now })),
+      { action: 'confirmed', at: now },
+    ]
+    const consent = { consented: true, text: CONSENT_TEXT, at: now }
+
+    return { household_id: householdId, household, documents: docs, sanity_issues: issues, consent, audit: auditLog }
   }
 
   async function saveForUser(user: AuthedUser) {
@@ -188,6 +209,10 @@ export default function ConfirmView({ documents, onBack, onSaved }: Props) {
   }
 
   function handlePrimary() {
+    if (!consented) {
+      setError('Please agree to the consent statement below to continue.')
+      return
+    }
     if (!allReviewed) {
       setError(`Confirm the ${pendingReviews} highlighted field${pendingReviews === 1 ? '' : 's'} first (tap the check).`)
       return
@@ -346,6 +371,23 @@ export default function ConfirmView({ documents, onBack, onSaved }: Props) {
           </ul>
         </div>
       )}
+
+      <article className="doc consent-block">
+        <h3 className="doc-title">How your information is used</h3>
+        <ul className="data-use-list">
+          <li>Your documents are read to fill in this form. You confirm every value.</li>
+          <li>Your income is compared to the program's published 60% AMI threshold.</li>
+          <li>We keep the confirmed values, not the original documents, and never decide your eligibility.</li>
+        </ul>
+        <label className="consent-row">
+          <input
+            type="checkbox"
+            checked={consented}
+            onChange={(e) => { setConsented(e.target.checked); setError(null) }}
+          />
+          <span>{CONSENT_TEXT}</span>
+        </label>
+      </article>
 
       <div className="review-actions">
         <button type="button" className="btn-secondary" onClick={onBack} disabled={saving}>Back to upload</button>

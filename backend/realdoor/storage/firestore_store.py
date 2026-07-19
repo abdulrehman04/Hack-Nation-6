@@ -120,12 +120,23 @@ class FirestoreProfileStore(ProfileStore):
             })
         return sorted(summaries, key=lambda s: s.get("created_at") or "", reverse=True)
 
+    def delete(self, profile_id: str) -> bool:
+        url = f"{self._docs}/{self.collection}/{profile_id}?key={self.api_key}"
+        try:
+            self._request("DELETE", url)
+            return True
+        except FirestoreError as exc:
+            if exc.code == 404:
+                return False
+            raise
+
     def _request(self, method: str, url: str, body: dict | None = None) -> dict:
         data = json.dumps(body).encode("utf-8") if body is not None else None
         req = urllib.request.Request(
             url, data=data, method=method, headers={"Content-Type": "application/json"})
         try:
             with urllib.request.urlopen(req, timeout=15) as response:
-                return json.loads(response.read().decode("utf-8"))
+                raw = response.read().decode("utf-8")
+                return json.loads(raw) if raw.strip() else {}
         except urllib.error.HTTPError as exc:
             raise FirestoreError(exc.code, exc.read().decode("utf-8", "replace")) from None

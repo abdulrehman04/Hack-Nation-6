@@ -46,6 +46,16 @@ class TestJsonProfileStore(unittest.TestCase):
         self.assertTrue((Path(self.tmp.name) / "profiles" / f"{pid}.json").exists())
         self.assertTrue((Path(self.tmp.name) / "index.json").exists())
 
+    def test_delete_removes_profile_and_index_entry(self):
+        pid = self.store.save(dict(SAMPLE))
+        self.assertTrue(self.store.delete(pid))
+        self.assertIsNone(self.store.get(pid))
+        self.assertEqual(self.store.list_summaries(), [])
+        self.assertFalse((Path(self.tmp.name) / "profiles" / f"{pid}.json").exists())
+
+    def test_delete_missing_returns_false(self):
+        self.assertFalse(self.store.delete("nope"))
+
 
 if __name__ == "__main__":
     unittest.main()

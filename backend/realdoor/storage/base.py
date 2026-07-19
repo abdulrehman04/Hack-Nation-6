@@ -33,3 +33,7 @@ class ProfileStore(ABC):
     @abstractmethod
     def list_summaries(self) -> list[dict]:
         """Return lightweight summaries of all stored profiles, newest first."""
+
+    @abstractmethod
+    def delete(self, profile_id: str) -> bool:
+        """Remove a profile. Return True if it existed, False otherwise."""

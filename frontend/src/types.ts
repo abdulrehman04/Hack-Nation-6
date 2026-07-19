@@ -79,3 +79,9 @@ export interface ChatResponse {
   citations?: Citation[]
   abstained: boolean
 }
+
+export interface AuditEvent {
+  action: string
+  detail?: string
+  at: string
+}

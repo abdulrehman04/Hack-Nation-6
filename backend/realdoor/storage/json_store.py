@@ -47,6 +47,15 @@ class JsonProfileStore(ProfileStore):
         summaries = json.loads(self.index_path.read_text(encoding="utf-8"))
         return sorted(summaries, key=lambda s: s["created_at"], reverse=True)
 
+    def delete(self, profile_id: str) -> bool:
+        path = self.profiles_dir / f"{profile_id}.json"
+        existed = path.exists()
+        if existed:
+            path.unlink()
+        remaining = [s for s in self.list_summaries() if s["profile_id"] != profile_id]
+        self.index_path.write_text(json.dumps(remaining, indent=2), encoding="utf-8")
+        return existed
+
     def _index_upsert(self, record: dict) -> None:
         summaries = self.list_summaries()
         summaries = [s for s in summaries if s["profile_id"] != record["profile_id"]]

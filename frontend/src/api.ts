@@ -49,6 +49,18 @@ export async function listMyProfiles(idToken: string): Promise<ProfileSummary[]>
   return data.profiles
 }
 
+// Permanently delete all of the signed-in user's saved data.
+export async function deleteMyData(idToken: string): Promise<{ deleted: number }> {
+  const res = await fetch(`${API_BASE}/profiles`, {
+    method: 'DELETE',
+    headers: { Authorization: `Bearer ${idToken}` },
+  })
+  if (!res.ok) {
+    throw new Error(`Delete failed (${res.status}): ${await res.text()}`)
+  }
+  return res.json()
+}
+
 // Phase 1: fetch the enriched, cited profile for one household.
 export async function fetchUnderstand(householdId: string): Promise<EnrichedProfile> {
   const res = await fetch(`${API_BASE}/api/understand/${householdId}`)

@@ -4,10 +4,10 @@ import AccountView from './components/AccountView'
 import UploadForm from './components/UploadForm'
 import ConfirmView from './components/ConfirmView'
 import UnderstandView from './components/UnderstandView'
-import { extractDocuments, fetchUnderstand, listMyProfiles } from './api'
+import { deleteMyData, extractDocuments, fetchUnderstand, listMyProfiles } from './api'
 import { getIdToken, logOut, onAuth } from './firebase'
 import type { Account } from './firebase'
-import type { Doc, EnrichedProfile } from './types'
+import type { AuditEvent, Doc, EnrichedProfile } from './types'
 
 type View = 'login' | 'upload' | 'review' | 'understand' | 'account'
 
@@ -25,11 +25,15 @@ export default function App() {
   const [ready, setReady] = useState(false)
   const [view, setView] = useState<View>('login')
   const [documents, setDocuments] = useState<Doc[]>([])
+  const [audit, setAudit] = useState<AuditEvent[]>([])
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [enrichedProfile, setEnrichedProfile] = useState<EnrichedProfile | null>(null)
   const [householdId, setHouseholdId] = useState<string | null>(null)
   const [understandLoading, setUnderstandLoading] = useState(false)
+  const [showDelete, setShowDelete] = useState(false)
+  const [deleting, setDeleting] = useState(false)
+  const [deleteError, setDeleteError] = useState<string | null>(null)
   const initialized = useRef(false)
 
   // Load the signed-in user's saved profile and open their dashboard.
@@ -78,11 +82,23 @@ export default function App() {
     try {
       const res = await extractDocuments(files)
       setDocuments((prev) => [...prev, ...res.documents])
+      const n = res.documents.length
+      setAudit((prev) => [
+        ...prev,
+        { action: 'uploaded', detail: `${n} document${n === 1 ? '' : 's'}`, at: new Date().toISOString() },
+      ])
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
     } finally {
       setBusy(false)
     }
+  }
+
+  function startNew() {
+    setDocuments([])
+    setAudit([])
+    setError(null)
+    setView('upload')
   }
 
   function removeDoc(index: number) {
@@ -95,6 +111,21 @@ export default function App() {
     setEnrichedProfile(null)
     setHouseholdId(null)
     setView('login')
+  }
+
+  async function confirmDelete() {
+    setDeleting(true)
+    setDeleteError(null)
+    try {
+      const token = await getIdToken()
+      if (token) await deleteMyData(token)
+      setShowDelete(false)
+      await signOut()
+    } catch (e) {
+      setDeleteError(e instanceof Error ? e.message : String(e))
+    } finally {
+      setDeleting(false)
+    }
   }
 
   // After a new user saves and creates an account, open their dashboard.
@@ -136,6 +167,13 @@ export default function App() {
           {account && (
             <div className="masthead-account">
               <span className="muted">{account.email}</span>
+              <button
+                type="button"
+                className="btn-secondary btn-sm btn-danger"
+                onClick={() => { setDeleteError(null); setShowDelete(true) }}
+              >
+                Delete my data
+              </button>
               <button type="button" className="btn-secondary btn-sm" onClick={signOut}>Sign out</button>
             </div>
           )}
@@ -167,7 +205,7 @@ export default function App() {
         {ready && !understandLoading && (
           <>
             {view === 'login' && (
-              <LoginPage onLoggedIn={enterDashboard} onStartNew={() => setView('upload')} />
+              <LoginPage onLoggedIn={enterDashboard} onStartNew={startNew} />
             )}
 
             {view === 'account' && account && (
@@ -187,6 +225,7 @@ export default function App() {
             {view === 'review' && (
               <ConfirmView
                 documents={documents}
+                audit={audit}
                 onBack={() => setView('upload')}
                 onSaved={afterSaved}
               />
@@ -198,6 +237,32 @@ export default function App() {
           </>
         )}
       </main>
+
+      {showDelete && (
+        <div className="modal-overlay" onClick={() => !deleting && setShowDelete(false)}>
+          <div
+            className="modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="delete-title"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h2 id="delete-title">Delete your data?</h2>
+            <p className="modal-lede">
+              This permanently removes your saved profile and its documents. This cannot be undone.
+            </p>
+            {deleteError && <p role="alert" className="notice notice-error">{deleteError}</p>}
+            <div className="modal-actions">
+              <button type="button" className="btn-secondary" onClick={() => setShowDelete(false)} disabled={deleting}>
+                Cancel
+              </button>
+              <button type="button" className="btn-primary btn-danger" onClick={confirmDelete} disabled={deleting}>
+                {deleting ? 'Deleting…' : 'Delete my data'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

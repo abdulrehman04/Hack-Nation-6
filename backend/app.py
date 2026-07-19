@@ -7,7 +7,9 @@ confirmation UI. Files are processed in memory and never persisted.
     uvicorn backend.app:app --reload      # from the repo root
 """
 
+import csv
 import sys
+from datetime import datetime, timezone
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -24,6 +26,7 @@ from realdoor.extraction.assembly import LABELS, assemble  # noqa: E402
 from realdoor.extraction.classify import detect_document_type  # noqa: E402
 from realdoor.extraction.readers import extract_bytes, render_first_page  # noqa: E402
 from realdoor.rules import answer_question, run_household  # noqa: E402
+from realdoor.rules import corpus  # noqa: E402
 from realdoor.storage import get_store  # noqa: E402
 
 app = FastAPI(title="RealDoor extraction API")
@@ -112,6 +115,20 @@ class ConfirmedProfile(BaseModel):
     household: dict[str, Any] = {}
     documents: list[StoredDocument]
     sanity_issues: list[str] = []
+    consent: dict[str, Any] | None = None
+    audit: list[dict[str, Any]] = []
+
+
+def _rule_versions() -> dict:
+    """The frozen rule set in force at save time, for later auditing."""
+    with config.MTSP_CSV.open(encoding="utf-8") as f:
+        mtsp_rows = list(csv.DictReader(f))
+    rules = corpus.get_rules()
+    return {
+        "mtsp_effective_date": mtsp_rows[0]["effective_date"] if mtsp_rows else None,
+        "rules": [{"rule_id": rid, "effective_date": r["effective_date"]} for rid, r in rules.items()],
+        "stamped_at": datetime.now(timezone.utc).isoformat(),
+    }
 
 
 def _require_uid(authorization: str | None) -> str:
@@ -129,8 +146,16 @@ def _require_uid(authorization: str | None) -> str:
 def create_profile(profile: ConfirmedProfile, authorization: str | None = Header(None)) -> dict:
     """Persist a renter-confirmed profile against the signed-in user."""
     uid = _require_uid(authorization)
+    if not (profile.consent and profile.consent.get("consented")):
+        raise HTTPException(400, "consent is required to save")
+
     record = profile.model_dump()
     record["owner_uid"] = uid
+    record["rule_versions"] = _rule_versions()
+    record["audit"] = [*record.get("audit", []), {
+        "action": "stored",
+        "at": datetime.now(timezone.utc).isoformat(),
+    }]
     try:
         profile_id = get_store().save(record)
     except Exception as exc:  # storage backend failed; surface it cleanly
@@ -153,6 +178,16 @@ def read_profile(profile_id: str, authorization: str | None = Header(None)) -> d
     if record is None or record.get("owner_uid") != uid:
         raise HTTPException(404, "profile not found")
     return record
+
+
+@app.delete("/profiles")
+def delete_my_data(authorization: str | None = Header(None)) -> dict:
+    """Delete every profile owned by the signed-in user."""
+    uid = _require_uid(authorization)
+    store = get_store()
+    mine = [s for s in store.list_summaries() if s.get("owner_uid") == uid]
+    deleted = sum(1 for s in mine if store.delete(s["profile_id"]))
+    return {"deleted": deleted}
 
 
 @app.get("/api/understand/{household_id}")
