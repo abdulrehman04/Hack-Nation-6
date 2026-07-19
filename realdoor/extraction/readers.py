@@ -1,11 +1,6 @@
-"""Extraction layer for RealDoor Phase 1 (Profile).
+"""Read a PDF into tokens: word, box, confidence, and source (text layer or OCR).
 
-Turns a one-page synthetic PDF into a unified list of tokens, each carrying a
-bounding box, a confidence, and its provenance (text layer vs OCR). Boxes are
-emitted in the gold-file convention: PDF points, bottom-left origin.
-
-This layer only reads and locates text. It never decides eligibility and never
-interprets embedded instructions -- every token is inert data for a later step.
+Boxes use the gold convention: PDF points, bottom-left origin.
 """
 
 from __future__ import annotations
@@ -18,16 +13,16 @@ import pytesseract
 from PIL import Image
 from pytesseract import Output
 
-# OCR render resolution; 300 DPI is the accuracy/speed sweet spot for Tesseract.
+# DPI to rasterize pages at before OCR.
 OCR_DPI = 300
 
-# A page with fewer real words than this is treated as scanned and sent to OCR.
+# Below this many words, treat the page as scanned and OCR it.
 TEXT_LAYER_MIN_WORDS = 5
 
 
 @dataclass
 class Token:
-    """One recognized word, located in bottom-left-origin PDF points."""
+    """One word and where it sits, in bottom-left-origin PDF points."""
 
     text: str
     bbox: tuple[float, float, float, float]
@@ -50,19 +45,19 @@ class ExtractedDocument:
     watermark_terms: set[str]  # words found in rotated/watermark spans
 
 
-# --- coordinate helpers ---------------------------------------------------
+# Coordinates
 
 def _flip_y_to_bottom_left(x0: float, y0_top: float, x1: float, y1_top: float,
                            page_height: float) -> tuple[float, float, float, float]:
-    """Convert a top-left-origin box to the gold bottom-left-origin convention."""
+    """Flip a top-left-origin box to bottom-left origin (the gold convention)."""
     return (round(x0, 2), round(page_height - y1_top, 2),
             round(x1, 2), round(page_height - y0_top, 2))
 
 
-# --- per-page extractors --------------------------------------------------
+# Per-page readers
 
 def _extract_text_layer(page: "fitz.Page", page_no: int) -> list[Token]:
-    """Pull embedded words with exact boxes; digital text is treated as certain."""
+    """Read words straight from the PDF text layer. Digital text gets confidence 1."""
     height = page.rect.height
     tokens: list[Token] = []
     for x0, y0, x1, y1, word, *_ in page.get_text("words"):
@@ -79,7 +74,7 @@ def _extract_text_layer(page: "fitz.Page", page_no: int) -> list[Token]:
 
 
 def _extract_ocr(page: "fitz.Page", page_no: int, dpi: int = OCR_DPI) -> list[Token]:
-    """Render the page and OCR it; pixel boxes are scaled to points and flipped."""
+    """Render the page and OCR it. Pixel boxes are scaled back to points."""
     height = page.rect.height
     scale = 72.0 / dpi
     pix = page.get_pixmap(matrix=fitz.Matrix(dpi / 72, dpi / 72))
@@ -91,7 +86,7 @@ def _extract_ocr(page: "fitz.Page", page_no: int, dpi: int = OCR_DPI) -> list[To
         if not word.strip():
             continue
         conf = float(data["conf"][i])
-        if conf < 0:  # -1 marks non-text regions
+        if conf < 0:  # Tesseract uses -1 for non-text regions.
             continue
         left, top = data["left"][i] * scale, data["top"][i] * scale
         right = left + data["width"][i] * scale
@@ -106,21 +101,21 @@ def _extract_ocr(page: "fitz.Page", page_no: int, dpi: int = OCR_DPI) -> list[To
     return tokens
 
 
-# --- public API -----------------------------------------------------------
+# Reading a document
 
 def page_is_digital(page: "fitz.Page") -> bool:
-    """A real text layer means we can skip OCR for this page."""
+    """True if the page has a usable text layer, so we can skip OCR."""
     return len(page.get_text("words")) >= TEXT_LAYER_MIN_WORDS
 
 
 def _rotated_span_terms(page: "fitz.Page") -> set[str]:
-    """Words drawn in rotated spans; the pack renders its watermark this way."""
+    """Words in rotated spans. The pack draws its watermark this way."""
     terms: set[str] = set()
     for block in page.get_text("dict")["blocks"]:
         if block.get("type") != 0:
             continue
         for line in block["lines"]:
-            if abs(line["dir"][1]) <= 0.01:  # horizontal text is content
+            if abs(line["dir"][1]) <= 0.01:  # Horizontal text is real content.
                 continue
             for span in line["spans"]:
                 for word in span["text"].split():
@@ -130,9 +125,9 @@ def _rotated_span_terms(page: "fitz.Page") -> set[str]:
 
 
 def extract_document(path: str | Path, force_method: str | None = None) -> ExtractedDocument:
-    """Extract every page, choosing text layer or OCR per page unless forced.
+    """Read every page, picking text layer or OCR per page.
 
-    force_method: "text_layer" or "ocr" to override auto-detection.
+    Pass force_method="text_layer" or "ocr" to skip auto-detection.
     """
     path = Path(path)
     doc = fitz.open(path)
@@ -164,11 +159,11 @@ def extract_document(path: str | Path, force_method: str | None = None) -> Extra
     )
 
 
-# --- box geometry (for validating against gold) ---------------------------
+# Box geometry, used to check tokens against gold boxes
 
 def boxes_overlap(a: tuple[float, float, float, float],
                   b: tuple[float, float, float, float]) -> float:
-    """Intersection-over-union of two bottom-left-origin boxes; 0 when disjoint."""
+    """Intersection-over-union of two boxes. Zero when they don't overlap."""
     ax0, ay0, ax1, ay1 = a
     bx0, by0, bx1, by1 = b
     ix0, iy0 = max(ax0, bx0), max(ay0, by0)

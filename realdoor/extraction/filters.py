@@ -1,8 +1,7 @@
-"""Remove watermark/boilerplate tokens and quarantine injected instructions.
+"""Drop watermark and boilerplate tokens, and set aside injected instructions.
 
-Document text is untrusted input. This layer strips the pack's synthetic
-watermark and fixture boilerplate, and lifts any embedded instruction into a
-separate quarantine string so it can be reported but never obeyed.
+Document text is untrusted. Any instruction hidden in a document is captured
+for the record but never acted on.
 """
 
 from __future__ import annotations
@@ -13,7 +12,7 @@ from dataclasses import dataclass
 from .readers import Token
 from .layout import group_lines
 
-# Prose lines that are fixture furniture, not applicant evidence.
+# Fixture furniture: prose that is not applicant evidence.
 _BOILERPLATE = re.compile(
     r"training fixture|names and organizations|not a real document|"
     r"generated \d{4}-\d{2}|no real person|not issued by a real employer|"
@@ -21,7 +20,7 @@ _BOILERPLATE = re.compile(
     re.IGNORECASE,
 )
 
-# Signatures of an attempt to hijack the system through document text.
+# Attempts to hijack the system through document text.
 _INJECTION = re.compile(
     r"ignore (prior|previous|all) instructions|disregard .* instructions|"
     r"mark .* approved|reveal .* system prompt|you are now",
@@ -31,26 +30,29 @@ _INJECTION = re.compile(
 
 @dataclass
 class FilterResult:
-    """Clean tokens plus anything quarantined or dropped for the record."""
+    """Clean tokens, plus what was quarantined or dropped."""
 
     clean_tokens: list[Token]
     injected_instruction: str | None
+    injected_tokens: list[Token]  # Kept for their location, never obeyed.
     dropped_watermark: int
     dropped_boilerplate: int
 
 
 def filter_tokens(tokens: list[Token], watermark_terms: set[str]) -> FilterResult:
-    """Drop watermark/boilerplate; capture (do not obey) injected instructions."""
+    """Strip watermark and boilerplate; pull out any injected instruction."""
     survivors = [t for t in tokens if t.text.strip().upper() not in watermark_terms]
     dropped_watermark = len(tokens) - len(survivors)
 
     clean: list[Token] = []
     injected: list[str] = []
+    injected_tokens: list[Token] = []
     dropped_boilerplate = 0
     for line in group_lines(survivors):
         text = line.text
         if _INJECTION.search(text):
-            injected.append(text)  # quarantined: recorded, never executed
+            injected.append(text)
+            injected_tokens.extend(line.tokens)
             continue
         if _BOILERPLATE.search(text):
             dropped_boilerplate += len(line.tokens)
@@ -60,6 +62,7 @@ def filter_tokens(tokens: list[Token], watermark_terms: set[str]) -> FilterResul
     return FilterResult(
         clean_tokens=clean,
         injected_instruction=" ".join(injected) if injected else None,
+        injected_tokens=injected_tokens,
         dropped_watermark=dropped_watermark,
         dropped_boilerplate=dropped_boilerplate,
     )

@@ -1,9 +1,4 @@
-"""Resolve paths into the vendored challenge data.
-
-The data we build against lives in this repo under `data/` (synthetic
-documents, gold, frozen MTSP limits, rule corpus, evaluation sets). Override
-the location with REALDOOR_DATA if you keep it elsewhere.
-"""
+"""Paths into the challenge data under data/. Override with REALDOOR_DATA."""
 
 from __future__ import annotations
 
@@ -28,7 +23,7 @@ QA_GOLD = DATA_ROOT / "qa_gold.jsonl"
 ADVERSARIAL_TESTS = DATA_ROOT / "adversarial_tests.jsonl"
 CHECKLISTS = DATA_ROOT / "application_checklists.json"
 
-# Output contracts (organizer schemas) that our results must validate against.
+# Organizer schemas our output must validate against.
 SCHEMAS_ROOT = REPO_ROOT / "schemas"
 SUBMISSION_SCHEMA = SCHEMAS_ROOT / "submission.schema.json"
 DOCUMENT_GOLD_SCHEMA = SCHEMAS_ROOT / "document_gold.schema.json"

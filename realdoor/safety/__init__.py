@@ -1,14 +1,9 @@
-"""Cross-cutting — Safety, privacy, and consent controls (to build).
+"""Cross-cutting safety controls (stub).
 
-Enforces the non-negotiable boundary across every stage: refuse eligibility
+The non-negotiable boundary applied across stages: refuse eligibility
 decisions, resist prompt injection, log consent and rule versions (never raw
-document contents), and support export and session deletion.
+document text), and support export and deletion. Injection quarantine currently
+lives in extraction/filters.py; this is where the rest will consolidate.
 
-Injection quarantine already lives in profile.filters; this package is where
-the refusal policy, consent/action log, and deletion routines will consolidate.
-
-Planned modules:
-    refusal.py    deflect 'decide for me' to rule + confirmed input + math
-    audit.py      consent, actions, rule versions (no raw document contents)
-    session.py    ephemeral storage, export, and hard deletion
+Planned: refusal.py, audit.py (consent log), session.py (export, deletion).
 """

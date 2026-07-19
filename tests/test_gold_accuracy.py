@@ -9,6 +9,11 @@ import unittest
 from realdoor import config
 from realdoor.extraction.assembly import assemble
 from realdoor.extraction.readers import extract_document
+from realdoor.extraction.serialize import (
+    GOLD_FIELD_KEYS,
+    GOLD_TOP_KEYS,
+    to_gold_record,
+)
 
 
 def _values_match(got, want) -> bool:
@@ -41,6 +46,22 @@ class TestGoldAccuracy(unittest.TestCase):
                     have = field.value if field else "<missing>"
                     misses.append(f"{rec['document_id']}/{gf['field']}: got {have!r} want {gf['value']!r}")
         self.assertEqual(misses, [], f"{len(misses)} field mismatches:\n" + "\n".join(misses))
+
+    def test_output_carries_every_gold_key_and_field(self):
+        for rec in self.gold:
+            extracted = extract_document(config.DOCUMENTS_DIR / rec["file_name"])
+            assembled = assemble(extracted, rec["document_type"])
+            out = to_gold_record(rec["document_id"], rec["household_id"],
+                                 rec["file_name"], extracted, assembled)
+            for key in GOLD_TOP_KEYS:
+                self.assertIn(key, out, f"{rec['document_id']} missing top key {key}")
+            for field in out["fields"]:
+                for key in GOLD_FIELD_KEYS:
+                    self.assertIn(key, field, f"{rec['document_id']} field missing {key}")
+            gold_names = {f["field"] for f in rec["fields"]}
+            our_names = {f["field"] for f in out["fields"]}
+            self.assertTrue(gold_names <= our_names,
+                            f"{rec['document_id']} missing fields {gold_names - our_names}")
 
     def test_adversarial_docs_quarantine_injection(self):
         for rec in self.gold:

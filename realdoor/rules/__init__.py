@@ -1,11 +1,8 @@
-"""Stage 2 — cited rules and deterministic math (to build).
+"""Stage 2 (stub): cited rules and deterministic math.
 
-Takes the renter-confirmed profile and, using the frozen rule corpus and frozen
-MTSP limits, shows confirmed value, threshold, formula, source, and effective
-date. Math runs in real code here, never in an LLM. Abstains when a rule or
-input is uncertain and never labels the renter eligible.
+Given a confirmed profile, show value, threshold, formula, source, and
+effective date from the frozen rule corpus and MTSP limits. Math runs in code,
+not the LLM. Abstain when unsure; never call the renter eligible.
 
-Planned modules:
-    corpus.py     load and cite the frozen rule corpus (id -> text + source)
-    calculate.py  annualize income; compare to the frozen 60% threshold
+Planned: corpus.py (cite the rule corpus), calculate.py (annualize, compare).
 """

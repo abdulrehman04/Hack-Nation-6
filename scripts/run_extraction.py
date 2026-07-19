@@ -1,7 +1,6 @@
-"""Smoke-test the extraction layer against the pack's gold boxes.
+"""Check that located tokens land on the gold boxes, and print coverage.
 
-Runs a digital document and a rasterized one, then checks that the tokens we
-locate fall on each gold field's source box, and prints overall coverage.
+Runs one digital and one rasterized document in detail, then all 24.
 
     python scripts/run_extraction.py
 """

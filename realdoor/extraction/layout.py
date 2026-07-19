@@ -1,8 +1,4 @@
-"""Group located tokens into reading-order lines.
-
-Tokens carry bottom-left-origin boxes, so lines run top-to-bottom by descending
-y and left-to-right by ascending x.
-"""
+"""Group tokens into reading-order lines: top-to-bottom, then left-to-right."""
 
 from __future__ import annotations
 

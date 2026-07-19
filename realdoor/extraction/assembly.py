@@ -1,8 +1,8 @@
-"""Field assembly: turn located tokens into typed, cited profile fields.
+"""Turn located tokens into typed, cited profile fields.
 
-Values are read by anchoring on each document's printed labels and taking the
-column beneath, so every field keeps an exact source box and a confidence. When
-a value is absent or unparseable the field abstains rather than guessing.
+Each value is read by finding its printed label and taking the column beneath,
+so every field keeps a source box and a confidence. When a value is missing or
+can't be parsed, the field abstains instead of guessing.
 """
 
 from __future__ import annotations
@@ -79,7 +79,7 @@ class AssembledDocument:
     injected_instruction: str | None
 
 
-# --- value parsing --------------------------------------------------------
+# Value parsing
 
 def _parse(value_type: str, text: str):
     text = text.strip()
@@ -106,7 +106,7 @@ def _parse(value_type: str, text: str):
     return None
 
 
-# --- label / column geometry ---------------------------------------------
+# Labels and columns
 
 def _find_label(lines: list[Line], phrase: str) -> tuple[int, float] | None:
     """Locate a label phrase; return (line index, first-token x0)."""
@@ -142,7 +142,7 @@ def _union_box(tokens: list[Token]) -> tuple[float, float, float, float]:
             max(t.bbox[2] for t in tokens), max(t.bbox[3] for t in tokens))
 
 
-# --- public API -----------------------------------------------------------
+# Assembly
 
 def assemble(extracted: ExtractedDocument, document_type: str) -> AssembledDocument:
     """Assemble typed fields for a document from its located tokens."""
@@ -183,12 +183,13 @@ def assemble(extracted: ExtractedDocument, document_type: str) -> AssembledDocum
         ))
 
     if filtered.injected_instruction:
+        toks = filtered.injected_tokens
         fields.append(Field(
             name="untrusted_instruction_text",
             value=filtered.injected_instruction,
-            confidence=1.0,
-            source_bbox=None,
-            source_method=extracted.method,
+            confidence=round(min(t.confidence for t in toks), 3) if toks else 1.0,
+            source_bbox=_union_box(toks) if toks else None,
+            source_method=toks[0].source if toks else extracted.method,
             status="quarantined",
             reason="embedded_instruction_detected_not_executed",
         ))

@@ -1,12 +1,12 @@
-"""RealDoor application-readiness copilot — assistive, never adjudicative.
+"""RealDoor application-readiness copilot. Assistive, never adjudicative.
 
 Stages (see CLAUDE.md for the full requirements):
-    extraction  Stage 1 — extract documents into confirmed fields  [built]
-    rules       Stage 2 — cited rules + deterministic math          [to build]
-    packet      Stage 3 — renter-controlled readiness packet        [to build]
-    safety      cross-cutting refusal / privacy / deletion          [to build]
+    extraction  Stage 1: read documents into confirmed fields   [built]
+    rules       Stage 2: cited rules and math                   [stub]
+    packet      Stage 3: renter-controlled packet               [stub]
+    safety      refusal, privacy, deletion                      [stub]
 
-This system extracts, cites, and computes; it never decides eligibility.
+It extracts, cites, and computes. It never decides eligibility.
 """
 
 from .extraction import (
