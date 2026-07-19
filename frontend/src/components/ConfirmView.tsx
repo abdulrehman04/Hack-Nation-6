@@ -79,7 +79,7 @@ function CheckIcon() {
 interface Props {
   documents: Doc[]
   onBack: () => void
-  onSaved: () => void
+  onSaved: (documents: Doc[]) => void
 }
 
 export default function ConfirmView({ documents, onBack, onSaved }: Props) {
@@ -160,7 +160,7 @@ export default function ConfirmView({ documents, onBack, onSaved }: Props) {
     try {
       await saveProfile(buildProfile(), user.idToken)
       setConfirmed(true)
-      onSaved()
+      onSaved(documents)
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
     } finally {

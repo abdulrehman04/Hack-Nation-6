@@ -23,6 +23,7 @@ from realdoor.auth import AuthError, verify_id_token  # noqa: E402
 from realdoor.extraction.assembly import LABELS, assemble  # noqa: E402
 from realdoor.extraction.classify import detect_document_type  # noqa: E402
 from realdoor.extraction.readers import extract_bytes, render_first_page  # noqa: E402
+from realdoor.rules import answer_question, run_household  # noqa: E402
 from realdoor.storage import get_store  # noqa: E402
 
 app = FastAPI(title="RealDoor extraction API")
@@ -151,3 +152,28 @@ def read_profile(profile_id: str, authorization: str | None = Header(None)) -> d
     if record is None or record.get("owner_uid") != uid:
         raise HTTPException(404, "profile not found")
     return record
+
+
+@app.get("/api/understand/{household_id}")
+def understand(household_id: str) -> dict:
+    """Run the Stage 02 Phase 1 calculation engine and return the cited enriched profile."""
+    try:
+        return run_household(household_id)
+    except KeyError:
+        raise HTTPException(404, f"Unknown household_id: {household_id}")
+
+
+class ChatRequest(BaseModel):
+    household_id: str
+    question: str
+    conversation_history: list[dict[str, Any]] = []
+
+
+@app.post("/api/chat")
+def chat(request: ChatRequest) -> dict:
+    """Answer a grounded, safety-checked question about one household's Phase 1 profile."""
+    try:
+        profile = run_household(request.household_id)
+    except KeyError:
+        raise HTTPException(404, f"Unknown household_id: {request.household_id}")
+    return answer_question(profile, request.question)

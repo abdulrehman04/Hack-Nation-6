@@ -37,6 +37,9 @@ FIREBASE_PROJECT_ID = os.environ.get("FIREBASE_PROJECT_ID", "hack-nation-6---rea
 FIREBASE_API_KEY = os.environ.get(
     "FIREBASE_API_KEY", "AIzaSyD298bLD4CRa87ghE-XOQFlSlpRKN5EphY")
 
+# Stage 01 extraction output, consumed by Stage 02 (realdoor/rules).
+EXTRACTION_OUTPUT = REPO_ROOT / "out" / "extraction_output.json"
+
 
 def data_available() -> bool:
     """True when the vendored challenge data can be found."""
