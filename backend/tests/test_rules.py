@@ -150,7 +150,7 @@ class TestQA(unittest.TestCase):
     def test_answer_question_abstains_without_api_key(self):
         profile = {"household_id": "HH-001", "annualized_income": 56316.0}
         with patch.dict(os.environ, {}, clear=False):
-            os.environ.pop("GEMINI_API_KEY", None)
+            os.environ.pop("OPENAI_API_KEY", None)
             result = answer_question(profile, "What is my annualized income?")
         self.assertTrue(result["abstained"])
         self.assertEqual(result["answer"], FALLBACK_MESSAGE)
@@ -158,7 +158,7 @@ class TestQA(unittest.TestCase):
 
     def test_answer_question_rejects_forbidden_language(self):
         profile = {"household_id": "HH-001", "annualized_income": 56316.0}
-        with patch("realdoor.rules.qa._call_gemini", return_value="You are approved."):
+        with patch("realdoor.rules.qa._call_llm", return_value="You are approved."):
             result = answer_question(profile, "Am I approved?")
         self.assertTrue(result["abstained"])
         self.assertIn("approved", result["safety_check"]["flagged_words_found"])
@@ -167,7 +167,7 @@ class TestQA(unittest.TestCase):
     def test_answer_question_returns_grounded_answer(self):
         profile = {"household_id": "HH-001", "annualized_income": 56316.0}
         grounded = "Per CH-INCOME-001, your annualized income is $56,316.00."
-        with patch("realdoor.rules.qa._call_gemini", return_value=grounded):
+        with patch("realdoor.rules.qa._call_llm", return_value=grounded):
             result = answer_question(profile, "What is my annualized income?")
         self.assertFalse(result["abstained"])
         self.assertEqual(result["answer"], grounded)
