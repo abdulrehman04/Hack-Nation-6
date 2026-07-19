@@ -1,4 +1,11 @@
-import type { ChatMessage, ChatResponse, EnrichedProfile, ExtractResponse } from './types'
+import type {
+  ChatMessage,
+  ChatResponse,
+  DeleteSessionResponse,
+  EnrichedProfile,
+  ExtractResponse,
+  PrepareData,
+} from './types'
 
 const API_BASE = import.meta.env.VITE_API_BASE ?? 'http://127.0.0.1:8000'
 
@@ -87,6 +94,41 @@ export async function sendChat(
   })
   if (!res.ok) {
     throw new Error(`Chat failed (${res.status}): ${await res.text()}`)
+  }
+  return res.json()
+}
+
+// Phase 3: checklist + packet data for the prepare/export/delete step.
+export async function fetchPrepare(householdId: string): Promise<PrepareData> {
+  const res = await fetch(`${API_BASE}/api/prepare/${householdId}`)
+  if (!res.ok) {
+    throw new Error(`Prepare failed (${res.status}): ${await res.text()}`)
+  }
+  return res.json()
+}
+
+// Assembles the final packet server-side and triggers a browser download of it.
+export async function exportPacket(householdId: string): Promise<void> {
+  const res = await fetch(`${API_BASE}/api/export/${householdId}`, { method: 'POST' })
+  if (!res.ok) {
+    throw new Error(`Export failed (${res.status}): ${await res.text()}`)
+  }
+  const blob = await res.blob()
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = `realdoor_packet_${householdId}.json`
+  document.body.appendChild(a)
+  a.click()
+  document.body.removeChild(a)
+  URL.revokeObjectURL(url)
+}
+
+// Renter-initiated deletion of all session data for this household.
+export async function deleteSession(householdId: string): Promise<DeleteSessionResponse> {
+  const res = await fetch(`${API_BASE}/api/session/${householdId}`, { method: 'DELETE' })
+  if (!res.ok) {
+    throw new Error(`Delete failed (${res.status}): ${await res.text()}`)
   }
   return res.json()
 }

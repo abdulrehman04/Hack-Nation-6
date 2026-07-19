@@ -49,9 +49,10 @@ function WarningIcon() {
 interface Props {
   profile: EnrichedProfile
   householdId: string
+  onContinue: () => void
 }
 
-export default function UnderstandView({ profile, householdId }: Props) {
+export default function UnderstandView({ profile, householdId, onContinue }: Props) {
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
@@ -233,6 +234,12 @@ export default function UnderstandView({ profile, householdId }: Props) {
             </div>
           </article>
         </div>
+      </div>
+
+      <div className="review-actions">
+        <button type="button" className="btn-primary" onClick={onContinue}>
+          Continue to prepare packet
+        </button>
       </div>
     </section>
   )

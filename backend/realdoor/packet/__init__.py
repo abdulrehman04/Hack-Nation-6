@@ -1,8 +1,25 @@
-"""Stage 3 (stub): renter-controlled readiness packet.
+"""Stage 3: renter-controlled readiness packet.
 
-Compare the confirmed profile and documents against the gold checklist, flag
-missing or expired items, and build a packet the renter can preview, edit,
-download, and delete. Never auto-send to any provider.
-
-Planned: checklist.py (missing/expired), builder.py (assemble the packet).
+Pipeline: checklist (missing/expired vs the gold checklist) -> builder
+(assemble the exportable packet; delete session data). The renter previews,
+downloads, and can delete everything; nothing here is ever auto-sent.
 """
+
+from .builder import (
+    DeletedSessionStore,
+    build_packet,
+    delete_session,
+    get_session_store,
+    is_session_deleted,
+)
+from .checklist import build_checklist, load_required_document_types
+
+__all__ = [
+    "build_checklist",
+    "load_required_document_types",
+    "build_packet",
+    "delete_session",
+    "is_session_deleted",
+    "get_session_store",
+    "DeletedSessionStore",
+]

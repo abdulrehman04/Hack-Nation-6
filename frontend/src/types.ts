@@ -85,3 +85,55 @@ export interface AuditEvent {
   detail?: string
   at: string
 }
+
+// Shapes returned by the Stage 03 endpoints: /api/prepare, /api/export, /api/session.
+
+export interface ChecklistRow {
+  document_type: string
+  label: string
+  optional: boolean
+  status: 'PRESENT_AND_CURRENT' | 'PRESENT_BUT_EXPIRED' | 'MISSING_REQUIRED' | 'NOT_PROVIDED_OPTIONAL'
+  count: number
+  message: string
+}
+
+export interface PrepareDocumentField {
+  field: string
+  value: string | number | null
+  page: number
+  bbox: [number, number, number, number] | null
+  bbox_units: string
+  confidence: number
+  status: string
+}
+
+export interface PrepareDocument {
+  document_id: string
+  document_type: string
+  file_name: string
+  fields: PrepareDocumentField[]
+}
+
+export interface PrepareData {
+  household_id: string
+  person_name: string
+  household_size: number
+  address: string
+  application_date: string
+  annualized_income: number
+  frozen_60_percent_threshold: number
+  comparison: 'below_or_equal' | 'above' | 'no_frozen_threshold'
+  readiness_status: 'READY_TO_REVIEW' | 'NEEDS_REVIEW'
+  review_reasons: string[]
+  checklist: ChecklistRow[]
+  documents: PrepareDocument[]
+  citations: Citation[]
+  disclosure: string
+}
+
+export interface DeleteSessionResponse {
+  deleted: boolean
+  household_id: string
+  deleted_at: string
+  items_deleted: string[]
+}

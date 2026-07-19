@@ -132,7 +132,7 @@ h1, h2, h3 { font-family: var(--serif); font-weight: 600; letter-spacing: -0.01e
 .content { max-width: 1000px; margin: 0 auto; padding: 2.25rem 1.5rem 5rem; }
 
 /* Buttons */
-.btn-primary, .btn-secondary {
+.btn-primary, .btn-secondary, .btn-danger {
   font: inherit; font-weight: 550;
   padding: 0.65rem 1.35rem;
   border-radius: 10px;
@@ -476,3 +476,71 @@ h1, h2, h3 { font-family: var(--serif); font-weight: 600; letter-spacing: -0.01e
   color: var(--muted); font-size: 0.78rem;
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
 }
+
+/* Prepare (Stage 03) */
+.card-subtitle { margin: 0.2rem 0 1rem; color: var(--muted); font-size: 0.88rem; }
+
+.checklist-list { list-style: none; margin: 0.75rem 0 0; padding: 0; display: flex; flex-direction: column; gap: 0.5rem; }
+.checklist-row {
+  display: grid; grid-template-columns: auto 1fr; column-gap: 0.75rem; row-gap: 0.15rem;
+  padding: 0.7rem 0.9rem; border-radius: 12px;
+  border: 1px solid var(--border); background: var(--surface);
+}
+.checklist-icon { grid-row: 1 / 3; align-self: start; margin-top: 0.1rem; }
+.checklist-label { grid-column: 2; grid-row: 1; font-weight: 600; }
+.checklist-message { grid-column: 2; grid-row: 2; font-size: 0.86rem; color: var(--muted); }
+
+.checklist-row.checklist-ok .checklist-icon { color: var(--ok); }
+.checklist-row.checklist-warn { border-color: var(--review-border); background: var(--review-bg); }
+.checklist-row.checklist-warn .checklist-icon { color: var(--review); }
+.checklist-row.checklist-danger { border-color: var(--danger-border); background: var(--danger-bg); }
+.checklist-row.checklist-danger .checklist-icon { color: var(--danger); }
+.checklist-row.checklist-muted .checklist-icon { color: var(--muted); }
+
+.optional-badge {
+  display: inline-block; margin-left: 0.5rem; padding: 0.1rem 0.45rem;
+  font-size: 0.7rem; font-weight: 600; vertical-align: middle;
+  background: var(--panel); border: 1px solid var(--border);
+  color: var(--muted); border-radius: 999px;
+}
+
+/* Document rows */
+.document-row {
+  border: 1px solid var(--border); border-radius: 12px;
+  padding: 0.9rem 1rem; margin-top: 0.75rem; background: var(--surface);
+}
+.document-row-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; flex-wrap: wrap; }
+.document-row-title { font-weight: 600; }
+.document-row-file { margin: 0.2rem 0 0; font-size: 0.85rem; }
+.document-row-actions { display: flex; gap: 0.5rem; flex: none; }
+.document-row-fields {
+  margin: 0.9rem 0 0; padding-top: 0.75rem; border-top: 1px solid var(--border);
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 0.6rem 1rem;
+}
+.document-row-field dt {
+  margin: 0; font-size: 0.72rem; text-transform: uppercase;
+  letter-spacing: 0.03em; color: var(--muted);
+}
+.document-row-field dd { margin: 0.1rem 0 0; font-weight: 500; }
+.document-row-hint { margin: 0.6rem 0 0; font-size: 0.8rem; }
+
+/* Readiness summary */
+.readiness-summary-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; margin: 1rem 0 1.5rem; }
+@media (max-width: 480px) { .readiness-summary-grid { grid-template-columns: 1fr; } }
+.summary-label {
+  margin-bottom: 0.25rem; font-size: 0.75rem; font-weight: 650;
+  letter-spacing: 0.05em; text-transform: uppercase; color: var(--muted);
+}
+.summary-value { font-size: 1rem; font-weight: 550; }
+.summary-value.income { font-family: var(--serif); font-size: 1.4rem; font-weight: 700; }
+.review-reason-tag { margin-top: 0.25rem; font-size: 0.85rem; color: var(--review); }
+
+.packet-disclaimer {
+  margin: 2rem auto 0; max-width: 800px;
+  color: var(--muted); font-size: 0.78rem; line-height: 1.6; text-align: center;
+}
+
+.danger-zone { border-color: var(--danger-border); }
+.btn-danger { background: transparent; border: 1px solid var(--danger-border); color: var(--danger); }
+.btn-danger:hover:not(:disabled) { background: var(--danger-bg); border-color: var(--danger); }
+.confirm-row { display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap; margin-top: 0.6rem; }

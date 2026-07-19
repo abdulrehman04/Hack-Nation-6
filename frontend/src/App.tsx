@@ -4,12 +4,13 @@ import AccountView from './components/AccountView'
 import UploadForm from './components/UploadForm'
 import ConfirmView from './components/ConfirmView'
 import UnderstandView from './components/UnderstandView'
-import { deleteMyData, extractDocuments, fetchUnderstand, listMyProfiles } from './api'
+import PrepareView from './components/PrepareView'
+import { deleteMyData, extractDocuments, fetchPrepare, fetchUnderstand, listMyProfiles } from './api'
 import { getIdToken, logOut, onAuth } from './firebase'
 import type { Account } from './firebase'
-import type { AuditEvent, Doc, EnrichedProfile } from './types'
+import type { AuditEvent, Doc, EnrichedProfile, PrepareData } from './types'
 
-type View = 'login' | 'upload' | 'review' | 'understand' | 'account'
+type View = 'login' | 'upload' | 'review' | 'understand' | 'prepare' | 'account'
 
 const STEPS = ['Upload documents', 'Review & confirm', 'Understand & confirm', 'Prepare packet']
 
@@ -31,6 +32,8 @@ export default function App() {
   const [enrichedProfile, setEnrichedProfile] = useState<EnrichedProfile | null>(null)
   const [householdId, setHouseholdId] = useState<string | null>(null)
   const [understandLoading, setUnderstandLoading] = useState(false)
+  const [prepareData, setPrepareData] = useState<PrepareData | null>(null)
+  const [prepareLoading, setPrepareLoading] = useState(false)
   const [showDelete, setShowDelete] = useState(false)
   const [deleting, setDeleting] = useState(false)
   const [deleteError, setDeleteError] = useState<string | null>(null)
@@ -97,6 +100,9 @@ export default function App() {
   function startNew() {
     setDocuments([])
     setAudit([])
+    setEnrichedProfile(null)
+    setHouseholdId(null)
+    setPrepareData(null)
     setError(null)
     setView('upload')
   }
@@ -108,8 +114,10 @@ export default function App() {
   async function signOut() {
     await logOut()
     setDocuments([])
+    setAudit([])
     setEnrichedProfile(null)
     setHouseholdId(null)
+    setPrepareData(null)
     setView('login')
   }
 
@@ -151,8 +159,24 @@ export default function App() {
     }
   }
 
-  const inFlow = view === 'upload' || view === 'review' || view === 'understand'
-  const stepIndex = view === 'upload' ? 0 : view === 'review' ? 1 : 2
+  async function onContinueToPrepare() {
+    if (!householdId) return
+    setError(null)
+    setPrepareLoading(true)
+    try {
+      const result = await fetchPrepare(householdId)
+      setPrepareData(result)
+      setView('prepare')
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e))
+    } finally {
+      setPrepareLoading(false)
+    }
+  }
+
+  const inFlow = view === 'upload' || view === 'review' || view === 'understand' || view === 'prepare'
+  const stepIndex = view === 'upload' ? 0 : view === 'review' ? 1 : view === 'understand' ? 2 : 3
+  const anyLoading = understandLoading || prepareLoading
 
   return (
     <div className="page">
@@ -180,7 +204,7 @@ export default function App() {
         </div>
       </header>
 
-      {inFlow && !understandLoading && (
+      {inFlow && !anyLoading && (
         <nav className="steps" aria-label="Progress">
           <ol className="steps-list">
             {STEPS.map((label, i) => (
@@ -201,8 +225,9 @@ export default function App() {
         {!ready && <p className="status">Loading…</p>}
         {error && <p role="alert" className="notice notice-error">{error}</p>}
         {ready && understandLoading && <p role="status" className="status">Loading your dashboard…</p>}
+        {ready && prepareLoading && <p role="status" className="status">Loading your packet…</p>}
 
-        {ready && !understandLoading && (
+        {ready && !anyLoading && (
           <>
             {view === 'login' && (
               <LoginPage onLoggedIn={enterDashboard} onStartNew={startNew} />
@@ -232,7 +257,20 @@ export default function App() {
             )}
 
             {view === 'understand' && enrichedProfile && householdId && (
-              <UnderstandView profile={enrichedProfile} householdId={householdId} />
+              <UnderstandView
+                profile={enrichedProfile}
+                householdId={householdId}
+                onContinue={onContinueToPrepare}
+              />
+            )}
+
+            {view === 'prepare' && prepareData && householdId && (
+              <PrepareView
+                data={prepareData}
+                householdId={householdId}
+                onBack={() => setView('understand')}
+                onStartOver={startNew}
+              />
             )}
           </>
         )}
