@@ -16,12 +16,16 @@ from typing import Any  # noqa: E402
 
 from fastapi import FastAPI, File, HTTPException, UploadFile  # noqa: E402
 from fastapi.middleware.cors import CORSMiddleware  # noqa: E402
+from fastapi.responses import JSONResponse  # noqa: E402
 from pydantic import BaseModel  # noqa: E402
 
 from realdoor.extraction.assembly import LABELS, assemble  # noqa: E402
 from realdoor.extraction.classify import detect_document_type  # noqa: E402
 from realdoor.extraction.readers import extract_bytes, render_first_page  # noqa: E402
-from realdoor.rules import answer_question, run_household  # noqa: E402
+from realdoor.packet import build_checklist, build_packet  # noqa: E402
+from realdoor.packet import delete_session as delete_household_session  # noqa: E402
+from realdoor.packet import is_session_deleted  # noqa: E402
+from realdoor.rules import answer_question, build_profile, load_households, run_household  # noqa: E402
 from realdoor.storage import get_store  # noqa: E402
 
 app = FastAPI(title="RealDoor extraction API")
@@ -131,9 +135,16 @@ def read_profile(profile_id: str) -> dict:
     return record
 
 
+def _require_active_session(household_id: str) -> None:
+    """Refuse to serve a household's data once its session has been deleted (Stage 03)."""
+    if is_session_deleted(household_id):
+        raise HTTPException(404, f"Session for {household_id} has been deleted")
+
+
 @app.get("/api/understand/{household_id}")
 def understand(household_id: str) -> dict:
     """Run the Stage 02 Phase 1 calculation engine and return the cited enriched profile."""
+    _require_active_session(household_id)
     try:
         return run_household(household_id)
     except KeyError:
@@ -149,8 +160,76 @@ class ChatRequest(BaseModel):
 @app.post("/api/chat")
 def chat(request: ChatRequest) -> dict:
     """Answer a grounded, safety-checked question about one household's Phase 1 profile."""
+    _require_active_session(request.household_id)
     try:
         profile = run_household(request.household_id)
     except KeyError:
         raise HTTPException(404, f"Unknown household_id: {request.household_id}")
     return answer_question(profile, request.question)
+
+
+def _load_household_documents(household_id: str) -> list:
+    households = load_households()
+    documents = households.get(household_id)
+    if documents is None:
+        raise HTTPException(404, f"Unknown household_id: {household_id}")
+    return documents
+
+
+def _serialize_document(doc) -> dict:
+    return {
+        "document_id": doc.document_id,
+        "document_type": doc.document_type,
+        "file_name": doc.file_name,
+        "fields": list(doc.fields.values()),
+    }
+
+
+@app.get("/api/prepare/{household_id}")
+def prepare(household_id: str) -> dict:
+    """Run the Stage 03 checklist against the confirmed profile and return packet data for the UI."""
+    _require_active_session(household_id)
+    documents = _load_household_documents(household_id)
+    profile = build_profile(household_id, documents)
+    checklist = build_checklist(household_id, documents)["checklist"]
+
+    return {
+        "household_id": profile["household_id"],
+        "person_name": profile["person_name"],
+        "household_size": profile["household_size"],
+        "address": profile["address"],
+        "application_date": profile["application_date"],
+        "annualized_income": profile["annualized_income"],
+        "frozen_60_percent_threshold": profile["frozen_60_percent_threshold"],
+        "comparison": profile["comparison"],
+        "readiness_status": profile["readiness_status"],
+        "review_reasons": profile["review_reasons"],
+        "checklist": checklist,
+        "documents": [_serialize_document(doc) for doc in documents],
+        "citations": profile["citations"],
+        "disclosure": profile["disclosure"],
+    }
+
+
+@app.post("/api/export/{household_id}")
+def export(household_id: str) -> JSONResponse:
+    """Assemble the final Stage 03 packet and return it as a downloadable JSON file.
+
+    Only ever returned to the renter's own request — never sent anywhere else.
+    """
+    _require_active_session(household_id)
+    documents = _load_household_documents(household_id)
+    profile = build_profile(household_id, documents)
+    checklist = build_checklist(household_id, documents)["checklist"]
+    packet = build_packet(household_id, profile, checklist)
+
+    return JSONResponse(
+        content=packet,
+        headers={"Content-Disposition": f'attachment; filename="realdoor_packet_{household_id}.json"'},
+    )
+
+
+@app.delete("/api/session/{household_id}")
+def delete_session_endpoint(household_id: str) -> dict:
+    """Delete all session data for this household. Never touches other households or frozen data."""
+    return delete_household_session(household_id)

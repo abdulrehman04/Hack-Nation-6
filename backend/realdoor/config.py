@@ -34,6 +34,11 @@ STORE_DIR = REPO_ROOT / "out" / "store"
 # Stage 01 extraction output, consumed by Stage 02 (realdoor/rules).
 EXTRACTION_OUTPUT = REPO_ROOT / "out" / "extraction_output.json"
 
+# Stage 03 session-deletion tombstones (realdoor/packet). A household_id
+# marked here is treated as deleted without mutating EXTRACTION_OUTPUT, which
+# is shared demo data for every household.
+SESSION_STORE_DIR = REPO_ROOT / "out" / "sessions"
+
 
 def data_available() -> bool:
     """True when the vendored challenge data can be found."""
