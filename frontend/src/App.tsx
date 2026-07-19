@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
+import type { ReactNode } from 'react'
 import LoginPage from './components/LoginPage'
-import AccountView from './components/AccountView'
 import UploadForm from './components/UploadForm'
 import ConfirmView from './components/ConfirmView'
 import UnderstandView from './components/UnderstandView'
@@ -18,7 +18,7 @@ import { getIdToken, logOut, onAuth } from './firebase'
 import type { Account } from './firebase'
 import type { AuditEvent, Doc, DiscoverData, EnrichedProfile, PrepareData } from './types'
 
-type View = 'login' | 'upload' | 'review' | 'understand' | 'prepare' | 'account' | 'discover'
+type Screen = 'login' | 'flow' | 'discover'
 
 const STEPS = ['Upload documents', 'Review & confirm', 'Understand & confirm', 'Prepare packet']
 
@@ -29,47 +29,130 @@ function householdIdFromFileName(fileName: string): string | null {
   return match ? match[1].toUpperCase() : null
 }
 
+// Rebuild editable docs from a saved packet, so returning users can correct fields
+// even with nothing uploaded this session.
+function reconstructDocs(data: PrepareData): Doc[] {
+  return data.documents.map((d) => ({
+    file_name: d.file_name,
+    document_type: d.document_type,
+    detected: true,
+    method: 'text_layer',
+    injected_instruction: null,
+    page_image: '',
+    page_size_points: [612, 792],
+    fields: d.fields.map((f) => ({
+      name: f.field,
+      value: f.value,
+      confidence: f.confidence,
+      source_method: null,
+      source_bbox: f.bbox,
+      status: f.status,
+      reason: null,
+    })),
+  }))
+}
+
+function LockIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <rect x="3" y="11" width="18" height="11" rx="2" />
+      <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+    </svg>
+  )
+}
+
+function CheckIcon() {
+  return (
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M20 6 9 17l-5-5" />
+    </svg>
+  )
+}
+
+function ChevronIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="m6 9 6 6 6-6" />
+    </svg>
+  )
+}
+
 export default function App() {
   const [account, setAccount] = useState<Account | null>(null)
   const [ready, setReady] = useState(false)
-  const [view, setView] = useState<View>('login')
+  const [screen, setScreen] = useState<Screen>('login')
   const [documents, setDocuments] = useState<Doc[]>([])
   const [audit, setAudit] = useState<AuditEvent[]>([])
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [enrichedProfile, setEnrichedProfile] = useState<EnrichedProfile | null>(null)
   const [householdId, setHouseholdId] = useState<string | null>(null)
-  const [understandLoading, setUnderstandLoading] = useState(false)
   const [prepareData, setPrepareData] = useState<PrepareData | null>(null)
-  const [prepareLoading, setPrepareLoading] = useState(false)
+  const [resultsLoading, setResultsLoading] = useState(false)
   const [discoverData, setDiscoverData] = useState<DiscoverData | null>(null)
   const [discoverLoading, setDiscoverLoading] = useState(false)
   const [showDelete, setShowDelete] = useState(false)
   const [deleting, setDeleting] = useState(false)
   const [deleteError, setDeleteError] = useState<string | null>(null)
+  const [activeStage, setActiveStage] = useState(0)
+  const [expanded, setExpanded] = useState<number>(0) // only one section open at a time
   const initialized = useRef(false)
 
-  // Load the signed-in user's saved profile and open their dashboard.
+  const uploadRef = useRef<HTMLDivElement>(null)
+  const reviewRef = useRef<HTMLDivElement>(null)
+  const understandRef = useRef<HTMLDivElement>(null)
+  const prepareRef = useRef<HTMLDivElement>(null)
+  const sectionRefs = [uploadRef, reviewRef, understandRef, prepareRef]
+
+  // Derived gate state: each stage unlocks only once the prior one has produced data.
+  const reviewUnlocked = documents.length > 0
+  const resultsUnlocked = !!enrichedProfile && !!prepareData
+  const stageUnlocked = [true, reviewUnlocked, resultsUnlocked, resultsUnlocked]
+
+  // Open one section (accordion) and scroll to it once its body has committed.
+  function goToStage(index: number) {
+    setExpanded(index)
+    setTimeout(() => sectionRefs[index].current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 90)
+  }
+
+  function toggleStage(index: number) {
+    setExpanded((prev) => (prev === index ? -1 : index))
+  }
+
+  // Fetch dashboard + packet together, both computed from the saved profile.
+  async function loadResults(hhId: string, token: string): Promise<PrepareData> {
+    const [understand, prepare] = await Promise.all([
+      fetchUnderstand(hhId, token),
+      fetchPrepare(hhId, token),
+    ])
+    setHouseholdId(hhId)
+    setEnrichedProfile(understand)
+    setPrepareData(prepare)
+    return prepare
+  }
+
+  // Load the signed-in user's saved profile into the single-page flow.
   async function enterDashboard() {
-    setUnderstandLoading(true)
     setError(null)
     try {
       const token = await getIdToken()
       const profiles = token ? await listMyProfiles(token) : []
       const hhId = profiles.map((p) => p.household_id).find((id): id is string => !!id)
-      if (!hhId) {
-        setView('account') // signed in, but no dashboard data yet
-        return
+      setScreen('flow')
+      if (hhId && token) {
+        setResultsLoading(true)
+        const prepare = await loadResults(hhId, token)
+        setDocuments(reconstructDocs(prepare)) // populate Review for returning users
+        goToStage(2) // returning users land on Understand
       }
-      const result = await fetchUnderstand(hhId, token!)
-      setHouseholdId(hhId)
-      setEnrichedProfile(result)
-      setView('understand')
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
-      setView('account')
+      setScreen('flow')
     } finally {
-      setUnderstandLoading(false)
+      setResultsLoading(false)
       setReady(true)
     }
   }
@@ -82,11 +165,26 @@ export default function App() {
       if (next) {
         enterDashboard()
       } else {
-        setView('login')
+        setScreen('login')
         setReady(true)
       }
     }
   }), [])
+
+  // Scroll-spy: highlight whichever stage sits under a line ~45% down the viewport.
+  useEffect(() => {
+    if (screen !== 'flow' || !ready) return
+    const observer = new IntersectionObserver((entries) => {
+      const visible = entries.filter((e) => e.isIntersecting)
+      if (visible.length === 0) return
+      const top = visible.reduce((a, b) => (a.boundingClientRect.top < b.boundingClientRect.top ? a : b))
+      const idx = sectionRefs.findIndex((r) => r.current === top.target)
+      if (idx >= 0) setActiveStage(idx)
+    }, { rootMargin: '-45% 0px -50% 0px', threshold: 0 })
+    sectionRefs.forEach((r) => r.current && observer.observe(r.current))
+    return () => observer.disconnect()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [screen, ready])
 
   async function addFiles(files: File[]) {
     if (files.length === 0) return
@@ -114,7 +212,8 @@ export default function App() {
     setHouseholdId(null)
     setPrepareData(null)
     setError(null)
-    setView('upload')
+    setScreen('flow')
+    goToStage(0)
   }
 
   function removeDoc(index: number) {
@@ -128,7 +227,8 @@ export default function App() {
     setEnrichedProfile(null)
     setHouseholdId(null)
     setPrepareData(null)
-    setView('login')
+    setExpanded(0)
+    setScreen('login')
   }
 
   async function confirmDelete() {
@@ -146,7 +246,7 @@ export default function App() {
     }
   }
 
-  // After a save (or edit re-save), keep the confirmed values and open the dashboard.
+  // After a save (or edit re-save), refresh dashboard + packet and reveal them.
   async function afterSaved(confirmedDocuments: Doc[]) {
     const hhId = confirmedDocuments
       .map((d) => householdIdFromFileName(d.file_name))
@@ -157,65 +257,16 @@ export default function App() {
     }
     setDocuments(confirmedDocuments)
     setError(null)
-    setUnderstandLoading(true)
+    setResultsLoading(true)
     try {
       const token = await getIdToken()
       if (!token) throw new Error('Please sign in again to view your dashboard.')
-      const result = await fetchUnderstand(hhId, token)
-      setHouseholdId(hhId)
-      setEnrichedProfile(result)
-      setView('understand')
+      await loadResults(hhId, token)
+      goToStage(2)
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
     } finally {
-      setUnderstandLoading(false)
-    }
-  }
-
-  function editFromPrepare() {
-    setError(null)
-    if (documents.length > 0) {
-      setView('review')
-      return
-    }
-    // Returning user: no uploads in memory, so rebuild editable docs from the packet.
-    if (!prepareData) return
-    const reconstructed: Doc[] = prepareData.documents.map((d) => ({
-      file_name: d.file_name,
-      document_type: d.document_type,
-      detected: true,
-      method: 'text_layer',
-      injected_instruction: null,
-      page_image: '',
-      page_size_points: [612, 792],
-      fields: d.fields.map((f) => ({
-        name: f.field,
-        value: f.value,
-        confidence: f.confidence,
-        source_method: null,
-        source_bbox: f.bbox,
-        status: f.status,
-        reason: null,
-      })),
-    }))
-    setDocuments(reconstructed)
-    setView('review')
-  }
-
-  async function onContinueToPrepare() {
-    if (!householdId) return
-    setError(null)
-    setPrepareLoading(true)
-    try {
-      const token = await getIdToken()
-      if (!token) throw new Error('Please sign in again to prepare your packet.')
-      const result = await fetchPrepare(householdId, token)
-      setPrepareData(result)
-      setView('prepare')
-    } catch (e) {
-      setError(e instanceof Error ? e.message : String(e))
-    } finally {
-      setPrepareLoading(false)
+      setResultsLoading(false)
     }
   }
 
@@ -223,14 +274,14 @@ export default function App() {
   async function onDiscover() {
     setError(null)
     if (discoverData) {
-      setView('discover')
+      setScreen('discover')
       return
     }
     setDiscoverLoading(true)
     try {
       const result = await fetchDiscover()
       setDiscoverData(result)
-      setView('discover')
+      setScreen('discover')
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
     } finally {
@@ -238,9 +289,46 @@ export default function App() {
     }
   }
 
-  const inFlow = view === 'upload' || view === 'review' || view === 'understand' || view === 'prepare'
-  const stepIndex = view === 'upload' ? 0 : view === 'review' ? 1 : view === 'understand' ? 2 : 3
-  const anyLoading = understandLoading || prepareLoading || discoverLoading
+  if (!ready) {
+    return (
+      <div className="page">
+        <main className="content"><p className="status">Loading…</p></main>
+      </div>
+    )
+  }
+
+  if (screen === 'login') {
+    return (
+      <div className="page">
+        <header className="masthead">
+          <div className="masthead-inner">
+            <span className="brand-mark">RealDoor</span>
+            <span className="brand-sub">Affordable Housing Application Readiness</span>
+          </div>
+        </header>
+        <main className="content">
+          {error && <p role="alert" className="notice notice-error">{error}</p>}
+          <LoginPage onLoggedIn={enterDashboard} onStartNew={startNew} />
+        </main>
+      </div>
+    )
+  }
+
+  if (screen === 'discover') {
+    return (
+      <div className="page">
+        <Masthead account={account} onDelete={() => { setDeleteError(null); setShowDelete(true) }} onSignOut={signOut} />
+        <main className="content">
+          {discoverLoading && <p role="status" className="status">Loading properties…</p>}
+          {discoverData && <DiscoverView data={discoverData} onBack={() => setScreen('flow')} />}
+        </main>
+        <DeleteModal
+          show={showDelete} deleting={deleting} error={deleteError}
+          onCancel={() => setShowDelete(false)} onConfirm={confirmDelete}
+        />
+      </div>
+    )
+  }
 
   return (
     <div className="page">
@@ -248,130 +336,175 @@ export default function App() {
         An application-readiness tool. It organizes your documents; a housing officer decides eligibility.
       </p>
 
-      <header className="masthead">
-        <div className="masthead-inner">
-          <span className="brand-mark">RealDoor</span>
-          <span className="brand-sub">Affordable Housing Application Readiness</span>
-          {account && (
-            <div className="masthead-account">
-              <span className="muted">{account.email}</span>
-              <button
-                type="button"
-                className="btn-secondary btn-sm btn-danger"
-                onClick={() => { setDeleteError(null); setShowDelete(true) }}
-              >
-                Delete my data
-              </button>
-              <button type="button" className="btn-secondary btn-sm" onClick={signOut}>Sign out</button>
-            </div>
-          )}
-        </div>
-      </header>
+      <Masthead account={account} onDelete={() => { setDeleteError(null); setShowDelete(true) }} onSignOut={signOut} />
 
-      {inFlow && !anyLoading && (
-        <nav className="steps" aria-label="Progress">
-          <ol className="steps-list">
-            {STEPS.map((label, i) => (
-              <li
-                key={label}
-                className={`step${i === stepIndex ? ' step-current' : ''}${i < stepIndex ? ' step-done' : ''}`}
-                aria-current={i === stepIndex ? 'step' : undefined}
-              >
-                <span className="step-num">{i + 1}</span>
-                <span className="step-label">{label}</span>
+      <nav className="steps steps-sticky" aria-label="Progress">
+        <ol className="steps-list">
+          {STEPS.map((label, i) => {
+            const unlocked = stageUnlocked[i]
+            const done = unlocked && i < activeStage
+            const cls = `step${i === activeStage ? ' step-current' : ''}${done ? ' step-done' : ''}`
+              + `${!unlocked ? ' step-locked' : ''}`
+            return (
+              <li key={label} className={cls} aria-current={i === activeStage ? 'step' : undefined}>
+                <button type="button" className="step-btn" disabled={!unlocked} onClick={() => goToStage(i)}>
+                  <span className="step-num">
+                    {!unlocked ? <LockIcon /> : done ? <CheckIcon /> : i + 1}
+                  </span>
+                  <span className="step-label">{label}</span>
+                </button>
               </li>
-            ))}
-          </ol>
-        </nav>
-      )}
+            )
+          })}
+        </ol>
+      </nav>
 
-      <main className="content">
-        {!ready && <p className="status">Loading…</p>}
+      <main className="content flow">
         {error && <p role="alert" className="notice notice-error">{error}</p>}
-        {ready && understandLoading && <p role="status" className="status">Loading your dashboard…</p>}
-        {ready && prepareLoading && <p role="status" className="status">Loading your packet…</p>}
-        {ready && discoverLoading && <p role="status" className="status">Loading properties…</p>}
 
-        {ready && !anyLoading && (
-          <>
-            {view === 'login' && (
-              <LoginPage onLoggedIn={enterDashboard} onStartNew={startNew} />
-            )}
+        <StageSection
+          index={1} title="Upload documents" sectionRef={uploadRef}
+          locked={false} expanded={expanded === 0} onToggle={() => toggleStage(0)}
+        >
+          <UploadForm
+            documents={documents}
+            busy={busy}
+            onAddFiles={addFiles}
+            onRemove={removeDoc}
+            onContinue={() => goToStage(1)}
+          />
+        </StageSection>
 
-            {view === 'account' && account && (
-              <AccountView account={account} onSignOut={signOut} />
-            )}
+        <StageSection
+          index={2} title="Review & confirm" sectionRef={reviewRef}
+          locked={!reviewUnlocked} hint="Upload your documents above to unlock."
+          expanded={expanded === 1} onToggle={() => toggleStage(1)}
+        >
+          <ConfirmView
+            documents={documents}
+            audit={audit}
+            onBack={() => goToStage(0)}
+            onSaved={afterSaved}
+          />
+        </StageSection>
 
-            {view === 'upload' && (
-              <UploadForm
-                documents={documents}
-                busy={busy}
-                onAddFiles={addFiles}
-                onRemove={removeDoc}
-                onContinue={() => setView('review')}
-              />
-            )}
+        <StageSection
+          index={3} title="Understand & confirm" sectionRef={understandRef}
+          locked={!resultsUnlocked} hint="Confirm your details in Review to unlock."
+          expanded={expanded === 2} onToggle={() => toggleStage(2)}
+        >
+          {resultsLoading ? (
+            <p role="status" className="status">Loading your dashboard…</p>
+          ) : enrichedProfile && householdId ? (
+            <UnderstandView
+              profile={enrichedProfile}
+              householdId={householdId}
+              onContinue={() => goToStage(3)}
+              onDiscover={onDiscover}
+            />
+          ) : null}
+        </StageSection>
 
-            {view === 'review' && (
-              <ConfirmView
-                documents={documents}
-                audit={audit}
-                onBack={() => setView('upload')}
-                onSaved={afterSaved}
-              />
-            )}
-
-            {view === 'understand' && enrichedProfile && householdId && (
-              <UnderstandView
-                profile={enrichedProfile}
-                householdId={householdId}
-                onContinue={onContinueToPrepare}
-                onDiscover={onDiscover}
-              />
-            )}
-
-            {view === 'discover' && discoverData && (
-              <DiscoverView data={discoverData} onBack={() => setView('understand')} />
-            )}
-
-            {view === 'prepare' && prepareData && householdId && (
-              <PrepareView
-                data={prepareData}
-                householdId={householdId}
-                onBack={() => setView('understand')}
-                onEdit={editFromPrepare}
-                onStartOver={startNew}
-              />
-            )}
-          </>
-        )}
+        <StageSection
+          index={4} title="Prepare packet" sectionRef={prepareRef}
+          locked={!resultsUnlocked} hint="Confirm your details in Review to unlock."
+          expanded={expanded === 3} onToggle={() => toggleStage(3)}
+        >
+          {prepareData && householdId ? (
+            <PrepareView
+              data={prepareData}
+              householdId={householdId}
+              onBack={() => goToStage(2)}
+              onEdit={() => goToStage(1)}
+              onStartOver={startNew}
+            />
+          ) : null}
+        </StageSection>
       </main>
 
-      {showDelete && (
-        <div className="modal-overlay" onClick={() => !deleting && setShowDelete(false)}>
-          <div
-            className="modal"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="delete-title"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <h2 id="delete-title">Delete your data?</h2>
-            <p className="modal-lede">
-              This permanently removes your saved profile and its documents. This cannot be undone.
-            </p>
-            {deleteError && <p role="alert" className="notice notice-error">{deleteError}</p>}
-            <div className="modal-actions">
-              <button type="button" className="btn-secondary" onClick={() => setShowDelete(false)} disabled={deleting}>
-                Cancel
-              </button>
-              <button type="button" className="btn-primary btn-danger" onClick={confirmDelete} disabled={deleting}>
-                {deleting ? 'Deleting…' : 'Delete my data'}
-              </button>
-            </div>
-          </div>
-        </div>
+      <DeleteModal
+        show={showDelete} deleting={deleting} error={deleteError}
+        onCancel={() => setShowDelete(false)} onConfirm={confirmDelete}
+      />
+    </div>
+  )
+}
+
+function StageSection({ index, title, locked, expanded, hint, onToggle, sectionRef, children }: {
+  index: number
+  title: string
+  locked: boolean
+  expanded: boolean
+  hint?: string
+  onToggle: () => void
+  sectionRef: React.RefObject<HTMLDivElement>
+  children: ReactNode
+}) {
+  return (
+    <div ref={sectionRef} className={`flow-section${expanded && !locked ? ' flow-section-open' : ''}`}>
+      <button
+        type="button"
+        className="stage-header"
+        disabled={locked}
+        aria-expanded={locked ? undefined : expanded}
+        onClick={onToggle}
+      >
+        <span className="stage-num">{locked ? <LockIcon /> : index}</span>
+        <span className="stage-title">{title}</span>
+        {locked
+          ? <span className="stage-lock"><LockIcon /></span>
+          : <span className={`stage-chevron${expanded ? ' open' : ''}`}><ChevronIcon /></span>}
+      </button>
+      {locked ? (
+        <p className="stage-hint muted">{hint}</p>
+      ) : (
+        <div className="stage-body" hidden={!expanded}>{children}</div>
       )}
+    </div>
+  )
+}
+
+function Masthead({ account, onDelete, onSignOut }: {
+  account: Account | null; onDelete: () => void; onSignOut: () => void
+}) {
+  return (
+    <header className="masthead">
+      <div className="masthead-inner">
+        <span className="brand-mark">RealDoor</span>
+        <span className="brand-sub">Affordable Housing Application Readiness</span>
+        {account && (
+          <div className="masthead-account">
+            <span className="muted">{account.email}</span>
+            <button type="button" className="btn-secondary btn-sm btn-danger" onClick={onDelete}>
+              Delete my data
+            </button>
+            <button type="button" className="btn-secondary btn-sm" onClick={onSignOut}>Sign out</button>
+          </div>
+        )}
+      </div>
+    </header>
+  )
+}
+
+function DeleteModal({ show, deleting, error, onCancel, onConfirm }: {
+  show: boolean; deleting: boolean; error: string | null; onCancel: () => void; onConfirm: () => void
+}) {
+  if (!show) return null
+  return (
+    <div className="modal-overlay" onClick={() => !deleting && onCancel()}>
+      <div className="modal" role="dialog" aria-modal="true" aria-labelledby="delete-title" onClick={(e) => e.stopPropagation()}>
+        <h2 id="delete-title">Delete your data?</h2>
+        <p className="modal-lede">
+          This permanently removes your saved profile and its documents. This cannot be undone.
+        </p>
+        {error && <p role="alert" className="notice notice-error">{error}</p>}
+        <div className="modal-actions">
+          <button type="button" className="btn-secondary" onClick={onCancel} disabled={deleting}>Cancel</button>
+          <button type="button" className="btn-primary btn-danger" onClick={onConfirm} disabled={deleting}>
+            {deleting ? 'Deleting…' : 'Delete my data'}
+          </button>
+        </div>
+      </div>
     </div>
   )
 }

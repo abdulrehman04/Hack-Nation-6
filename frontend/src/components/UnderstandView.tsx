@@ -240,7 +240,7 @@ export default function UnderstandView({ profile, householdId, onContinue, onDis
         </div>
       </div>
 
-      <div className="review-actions">
+      <div className="review-actions understand-actions">
         <button type="button" className="btn-secondary" onClick={onDiscover}>
           Discover properties
         </button>
