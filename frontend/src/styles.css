@@ -383,7 +383,11 @@ h1, h2, h3 { font-family: var(--serif); font-weight: 600; letter-spacing: -0.01e
   background: var(--review-bg); border-color: var(--review-border); color: var(--review);
 }
 .chat-message.chat-typing { color: var(--muted); font-weight: 700; letter-spacing: 0.1em; }
-.chat-citation { margin-top: 0.4rem !important; font-size: 0.76rem; color: var(--muted); }
+.chat-citation-row { display: flex; flex-wrap: wrap; gap: 0.35rem; margin-top: 0.55rem; }
+.chat-citation-chip {
+  background: var(--accent-soft); border-color: var(--accent-soft);
+  color: var(--accent-hover); font-weight: 650;
+}
 
 .chat-input-row { display: flex; gap: 0.6rem; }
 .chat-input-row input {
