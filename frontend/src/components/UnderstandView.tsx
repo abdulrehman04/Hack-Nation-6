@@ -25,6 +25,16 @@ function money(value: number): string {
   return value.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 }
 
+// Defensive belt-and-suspenders: the prompt tells Gemini to skip markdown, but
+// strip common markers anyway so a slip doesn't show literal asterisks/backticks.
+function stripMarkdown(text: string): string {
+  return text
+    .replace(/\*\*(.*?)\*\*/g, '$1')
+    .replace(/__(.*?)__/g, '$1')
+    .replace(/`([^`]*)`/g, '$1')
+    .replace(/^#{1,6}\s+/gm, '')
+}
+
 function WarningIcon() {
   return (
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
@@ -180,9 +190,13 @@ export default function UnderstandView({ profile, householdId }: Props) {
               )}
               {messages.map((m, i) => (
                 <div key={i} className={`chat-message ${m.role}${m.abstained ? ' chat-message-abstained' : ''}`}>
-                  <p>{m.content}</p>
+                  <p>{m.role === 'assistant' ? stripMarkdown(m.content) : m.content}</p>
                   {m.role === 'assistant' && m.rule_ids_cited && m.rule_ids_cited.length > 0 && (
-                    <p className="chat-citation">source: {m.rule_ids_cited.join(', ')}</p>
+                    <div className="chat-citation-row">
+                      {m.rule_ids_cited.map((id) => (
+                        <span key={id} className="citation-chip chat-citation-chip">{id}</span>
+                      ))}
+                    </div>
                   )}
                 </div>
               ))}
