@@ -83,9 +83,14 @@ The data we build against is vendored into this repo under `data/` and resolved 
 - `data/rule_corpus.jsonl` — 11 cited rules (id, authority, effective_date, text, source_url, locator).
 - `data/qa_gold.jsonl` — 36 gold Q&A. `data/adversarial_tests.jsonl` — 24 attacks. `data/application_checklists.json` — per-household expected readiness + annualized income + threshold.
 
-Dropped from the pack (not needed): participant guide, governance docs, and the organizer reference code (we have our own).
+Kept alongside `data/`:
+- `schemas/submission.schema.json` — **the required output contract.** Stage 2/3 results must validate against it: `household_id`, `annualized_income` (≥0), `comparison` (`below_or_equal` | `above` | `no_frozen_threshold`), `readiness_status` (`READY_TO_REVIEW` | `NEEDS_REVIEW`), `citations[]`. Note: readiness is never "eligible/approved", and `no_frozen_threshold` is the abstain path.
+- `schemas/document_gold.schema.json` — extraction gold record shape.
+- `reference/starter/` — organizer reference code (`calculate.py`, `load_documents.py`, `rules.py`, `example_profile.json`), kept for reference only; not imported by our package.
 
-**Ground truth is this data. Match its answer keys — never invent rules or numbers.**
+Dropped from the pack (not needed): participant guide, governance docs.
+
+**Ground truth is this data. Match its answer keys and the submission schema — never invent rules or numbers.**
 
 ## 8. Our architecture (in this repo)
 

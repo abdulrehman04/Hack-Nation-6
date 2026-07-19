@@ -28,6 +28,11 @@ QA_GOLD = DATA_ROOT / "qa_gold.jsonl"
 ADVERSARIAL_TESTS = DATA_ROOT / "adversarial_tests.jsonl"
 CHECKLISTS = DATA_ROOT / "application_checklists.json"
 
+# Output contracts (organizer schemas) that our results must validate against.
+SCHEMAS_ROOT = REPO_ROOT / "schemas"
+SUBMISSION_SCHEMA = SCHEMAS_ROOT / "submission.schema.json"
+DOCUMENT_GOLD_SCHEMA = SCHEMAS_ROOT / "document_gold.schema.json"
+
 
 def data_available() -> bool:
     """True when the vendored challenge data can be found."""
