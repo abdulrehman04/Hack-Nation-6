@@ -5,6 +5,7 @@ Boxes use the gold convention: PDF points, bottom-left origin.
 
 from __future__ import annotations
 
+import base64
 from dataclasses import dataclass, asdict
 from pathlib import Path
 
@@ -172,6 +173,20 @@ def extract_bytes(data: bytes, file_name: str, force_method: str | None = None) 
         return _read_open_doc(doc, file_name, force_method)
     finally:
         doc.close()
+
+
+def render_first_page(data: bytes, dpi: int = 150) -> tuple[str, tuple[float, float]]:
+    """Render page 1 to a base64 PNG data URL, with the page size in points."""
+    doc = fitz.open(stream=data, filetype="pdf")
+    try:
+        page = doc[0]
+        size = (page.rect.width, page.rect.height)
+        pix = page.get_pixmap(matrix=fitz.Matrix(dpi / 72, dpi / 72))
+        png = pix.tobytes("png")
+    finally:
+        doc.close()
+    encoded = base64.b64encode(png).decode("ascii")
+    return f"data:image/png;base64,{encoded}", size
 
 
 # Box geometry, used to check tokens against gold boxes

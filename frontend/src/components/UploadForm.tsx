@@ -121,11 +121,11 @@ export default function UploadForm({ documents, busy, onAddFiles, onRemove, onCo
 
       <button
         type="button"
-        className="read-btn"
+        className="btn-primary btn-block"
         disabled={documents.length === 0 || busy}
         onClick={onContinue}
       >
-        Continue to confirm
+        Continue to review
       </button>
     </div>
   )

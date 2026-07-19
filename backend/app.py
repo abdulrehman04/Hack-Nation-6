@@ -17,14 +17,14 @@ from fastapi.middleware.cors import CORSMiddleware  # noqa: E402
 
 from realdoor.extraction.assembly import LABELS, assemble  # noqa: E402
 from realdoor.extraction.classify import detect_document_type  # noqa: E402
-from realdoor.extraction.readers import extract_bytes  # noqa: E402
+from realdoor.extraction.readers import extract_bytes, render_first_page  # noqa: E402
 
 app = FastAPI(title="RealDoor extraction API")
 
-# Vite dev server origin.
+# Any localhost port, so the Vite dev server works whatever port it lands on.
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
+    allow_origin_regex=r"http://(localhost|127\.0\.0\.1):\d+",
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -62,10 +62,16 @@ async def extract(files: list[UploadFile] = File(...)) -> dict:
     for upload in files:
         data = await upload.read()
         extracted = extract_bytes(data, upload.filename or "document.pdf")
+        page_image, page_size = render_first_page(data)
         doc_type = detect_document_type(extracted)
+        base = {
+            "file_name": upload.filename,
+            "page_image": page_image,
+            "page_size_points": [page_size[0], page_size[1]],
+        }
         if doc_type is None:
             documents.append({
-                "file_name": upload.filename,
+                **base,
                 "document_type": None,
                 "detected": False,
                 "method": extracted.method,
@@ -74,6 +80,6 @@ async def extract(files: list[UploadFile] = File(...)) -> dict:
             })
             continue
         assembled = assemble(extracted, doc_type)
-        documents.append({"file_name": upload.filename, "detected": True, **_serialize(assembled)})
+        documents.append({**base, "detected": True, **_serialize(assembled)})
 
     return {"documents": documents}

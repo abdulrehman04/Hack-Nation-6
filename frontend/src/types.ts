@@ -16,6 +16,8 @@ export interface Doc {
   detected: boolean
   method: string
   injected_instruction: string | null
+  page_image: string
+  page_size_points: number[]
   fields: Field[]
 }
 
