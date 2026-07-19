@@ -72,9 +72,9 @@ A submission that does any of these **cannot win regardless of model quality**:
 | Accessibility | 15% | Keyboard-complete journey, understandable errors/status, readable source presentation. |
 | End-to-end usefulness | 15% | Coherent journey producing a clear, editable, renter-controlled packet. |
 
-## 7. Challenge data (vendored under `data/`)
+## 7. Challenge data (vendored under `backend/data/`)
 
-The data we build against is vendored into this repo under `data/` and resolved in `realdoor/config.py` (override with `REALDOOR_DATA`). It is a trimmed copy of the organizer starter pack — only what the code uses. Source pack is DRAFT ("organizer approval required before external distribution"), so keep this repo private until cleared.
+The data we build against is vendored under `backend/data/` and resolved in `backend/realdoor/config.py` (override with `REALDOOR_DATA`). It is a trimmed copy of the organizer starter pack, only what the code uses. Paths below are relative to `backend/`. Source pack is DRAFT ("organizer approval required before external distribution"), so keep this repo private until cleared.
 
 - `data/mtsp_2026_boston_cambridge_quincy.csv` — frozen income limits (50% + 60%; 60% is scored), with source page + URL.
 - `data/lihtc_boston_metro_subset.csv` + `property_data_dictionary.csv` — 32 LIHTC properties (locations/unit mix only; Discover-only).
@@ -94,43 +94,64 @@ Dropped from the pack (not needed): participant guide, governance docs.
 
 ## 8. Our architecture (in this repo)
 
-The package mirrors the three-stage pipeline. Names say what each part does —
-extraction/OCR is only Stage 1, not the whole app.
+Two top-level pieces: a Python `backend/` (extraction pipeline + API) and a
+React `frontend/`. The extraction package mirrors the three-stage pipeline;
+names say what each part does. OCR is only Stage 1, not the whole app.
 
 ```
-realdoor/
-├── config.py              # vendored data paths (REALDOOR_DATA)
-├── extraction/            # STAGE 1 — extract documents into confirmed fields   [built]
-│   ├── readers.py         #   PDF → tokens: text-layer + OCR readers, bbox + confidence
-│   ├── filters.py         #   drop watermark; quarantine injected instructions
-│   ├── layout.py          #   group tokens into reading-order lines
-│   └── assembly.py        #   label-anchored typed fields; abstains when unsure
-├── rules/                 # STAGE 2 — cited rules + deterministic math   [to build]
-│   ├── corpus.py          #   cite the frozen rule corpus
-│   └── calculate.py       #   annualize; compare to frozen 60% threshold
-├── packet/                # STAGE 3 — renter-controlled packet   [to build]
-│   ├── checklist.py       #   missing / expired vs gold checklist
-│   └── builder.py         #   preview/edit/download/delete; never auto-send
-└── safety/                # CROSS-CUTTING — refusal, consent log, deletion   [to build]
+backend/
+├── app.py                 # FastAPI: POST /extract -> realdoor pipeline
+├── realdoor/
+│   ├── config.py          # data and schema paths (override with REALDOOR_DATA)
+│   ├── extraction/        # STAGE 1: read documents into confirmed fields   [built]
+│   │   ├── readers.py     #   PDF -> tokens: text-layer + OCR, bbox + confidence
+│   │   ├── filters.py     #   drop watermark; quarantine injected instructions
+│   │   ├── layout.py      #   group tokens into reading-order lines
+│   │   ├── assembly.py    #   label-anchored typed fields; abstains when unsure
+│   │   └── serialize.py   #   emit the gold record schema
+│   ├── rules/             # STAGE 2: cited rules + math   [stub]
+│   ├── packet/            # STAGE 3: renter-controlled packet   [stub]
+│   └── safety/            # refusal, consent log, deletion   [stub]
+├── data/  schemas/  reference/    # vendored challenge data and contracts
+├── scripts/  tests/
+frontend/                  # React + Vite + TypeScript
+├── src/
+│   ├── components/UploadForm.tsx    # three upload slots -> document types
+│   ├── components/ConfirmView.tsx   # editable fields, confidence, review flags
+│   └── api.ts                       # calls backend /extract
 ```
 
-Runtime flow: `extraction (read → confirm) → rules (cite + compute) → packet (prepare)`, with `safety` enforced throughout. OCR itself is one reader inside `extraction/readers.py`.
+Runtime flow: `frontend upload -> backend extraction (read) -> confirm ->
+rules (cite + compute) -> packet (prepare)`, with `safety` enforced throughout.
 
-**Naming convention:** packages and modules are named for **what they do** in plain terms (`extraction`, `readers`, `rules`, `calculate`, `checklist`, `packet`, `safety`) — never abstract stage labels like `profile`/`understand`/`prepare`. A teammate should know a file's job from its name alone.
+**Naming convention:** packages and modules are named for what they do in plain
+terms (`extraction`, `readers`, `rules`, `calculate`, `checklist`, `packet`,
+`safety`), never abstract stage labels like `profile`/`understand`/`prepare`.
 
-- **Text vs OCR:** digital pages use the PyMuPDF text layer (exact boxes, confidence 1.0); rasterized pages are rendered and OCR'd with Tesseract (confidence from OCR). Coordinates are emitted in the gold's **bottom-left-origin PDF points**.
-- **Why not an LLM as the reader:** we need exact source boxes, calibrated confidence, injection immunity, and determinism — OCR/text-layer give all four. An LLM may only be a bounded, last-resort normalizer over already-sanitized tokens, never trusted for the source box or eligibility.
+- **Text vs OCR:** digital pages use the PyMuPDF text layer (exact boxes,
+  confidence 1.0); rasterized pages are rendered and OCR'd with Tesseract.
+  Coordinates are bottom-left-origin PDF points, matching the gold.
+- **Why not an LLM as the reader:** we need exact source boxes, calibrated
+  confidence, injection immunity, and determinism. An LLM may only be a bounded
+  normalizer over already-sanitized tokens, never trusted for the box.
 
-Current status: **Stage 1 complete** — 159/159 gold fields, 3/3 injections quarantined. Stages 2–3 pending.
+Current status: Stage 1 extraction complete (159/159 gold fields, 3/3 injections
+quarantined) with an upload/confirm frontend. Confirmation gate and Stages 2-3
+pending.
 
 ## 9. Dev workflow
 
 ```bash
-python3 -m venv .venv && source .venv/bin/activate
-pip install -r requirements-dev.txt          # needs system tesseract
-python -m unittest discover -s tests -v       # run tests
-flake8 realdoor scripts tests                 # lint (max-line-length 120)
-python scripts/run_assembly.py                # gold accuracy report
+# backend (run from backend/)
+python3 -m venv ../.venv && source ../.venv/bin/activate
+pip install -r requirements-dev.txt           # needs system tesseract
+python -m unittest discover -s tests -v        # tests
+flake8 realdoor app.py scripts tests           # lint (max-line-length 120)
+uvicorn app:app --reload --port 8000           # API
+
+# frontend (run from frontend/)
+npm install
+npm run dev                                     # http://localhost:5173
 ```
 
 ## 10. Coding conventions

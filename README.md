@@ -8,48 +8,61 @@ never decides eligibility.
 Challenge 03, RealPage x Hack-Nation (6th Global AI Hackathon). See
 [CLAUDE.md](./CLAUDE.md) for the full requirements and rules.
 
+## Structure
+
+```
+backend/    Python: extraction pipeline (realdoor package) + FastAPI (app.py)
+frontend/   React + Vite + TypeScript: upload and confirmation UI
+```
+
 ## Status
 
 - Stage 1 (extraction): done. Text-layer and OCR reading, watermark and
   injection filtering, label-anchored field assembly. 159/159 gold fields match.
-- Stage 2 (rules + math): not started.
-- Stage 3 (packet): not started.
+- Upload + confirmation frontend: done (confirmation gate logic pending).
+- Stage 2 (rules + math) and Stage 3 (packet): not started.
 
 ## Setup
 
-Needs the Tesseract OCR engine:
+Backend needs the Tesseract OCR engine:
 
 ```bash
 brew install tesseract          # macOS  (Debian: apt-get install tesseract-ocr)
-python3 -m venv .venv && source .venv/bin/activate
-pip install -r requirements-dev.txt
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r backend/requirements-dev.txt
 ```
 
-The challenge data lives in `data/`, so the repo runs on its own. Point it
-elsewhere with `REALDOOR_DATA=/path/to/data`. The data is a trimmed copy of the
-organizer's draft pack; keep the repo private until it is cleared for release.
+Frontend needs Node:
+
+```bash
+cd frontend && npm install
+```
+
+The challenge data is vendored in `backend/data/`, so the backend runs on its
+own. Point it elsewhere with `REALDOOR_DATA=/path/to/data`. The data is a
+trimmed copy of the organizer's draft pack; keep the repo private until cleared.
 
 ## Run
 
+Two terminals:
+
 ```bash
+# API
+cd backend && uvicorn app:app --reload --port 8000
+
+# web
+cd frontend && npm run dev        # http://localhost:5173
+```
+
+Then upload PDFs from `backend/data/documents/`.
+
+## Backend checks
+
+```bash
+cd backend
 python -m unittest discover -s tests -v   # tests
 python scripts/dump_output.py             # extract all docs to out/extraction_output.json
-python scripts/dump_gold.py               # gold as pretty json in out/gold_pretty.json
 python scripts/ocr_inspect.py <file>      # OCR any pdf or image, dump tokens
-flake8 realdoor scripts tests             # lint
-```
-
-## Layout
-
-```
-realdoor/
-  config.py       data and schema paths (override with REALDOOR_DATA)
-  extraction/     Stage 1: readers (text/OCR), filters, layout, assembly, serialize
-  rules/          Stage 2: cited rules + math (stub)
-  packet/         Stage 3: renter-controlled packet (stub)
-  safety/         refusal, consent log, deletion (stub)
-data/             challenge data (documents, gold, MTSP, rules, eval)
-schemas/          submission and document-gold schemas
-scripts/          extraction runners and dumps
-tests/            unit and gold-accuracy tests
+flake8 realdoor app.py scripts tests      # lint
 ```

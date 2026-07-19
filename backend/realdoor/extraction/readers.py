@@ -124,39 +124,54 @@ def _rotated_span_terms(page: "fitz.Page") -> set[str]:
     return terms
 
 
+def _read_open_doc(doc: "fitz.Document", file_name: str,
+                   force_method: str | None) -> ExtractedDocument:
+    """Read an already-open document into an ExtractedDocument."""
+    tokens: list[Token] = []
+    methods: set[str] = set()
+    terms: set[str] = set()
+    size = (doc[0].rect.width, doc[0].rect.height)
+    for page_no, page in enumerate(doc, start=1):
+        terms |= _rotated_span_terms(page)
+        use_ocr = (force_method == "ocr") or (
+            force_method != "text_layer" and not page_is_digital(page))
+        if use_ocr:
+            tokens.extend(_extract_ocr(page, page_no))
+            methods.add("ocr")
+        else:
+            tokens.extend(_extract_text_layer(page, page_no))
+            methods.add("text_layer")
+
+    method = methods.pop() if len(methods) == 1 else "mixed"
+    return ExtractedDocument(
+        file_name=file_name,
+        page_size_points=size,
+        method=method,
+        tokens=tokens,
+        watermark_terms=terms,
+    )
+
+
 def extract_document(path: str | Path, force_method: str | None = None) -> ExtractedDocument:
-    """Read every page, picking text layer or OCR per page.
+    """Read a PDF from disk, picking text layer or OCR per page.
 
     Pass force_method="text_layer" or "ocr" to skip auto-detection.
     """
     path = Path(path)
     doc = fitz.open(path)
     try:
-        tokens: list[Token] = []
-        methods: set[str] = set()
-        terms: set[str] = set()
-        size = (doc[0].rect.width, doc[0].rect.height)
-        for page_no, page in enumerate(doc, start=1):
-            terms |= _rotated_span_terms(page)
-            use_ocr = (force_method == "ocr") or (
-                force_method != "text_layer" and not page_is_digital(page))
-            if use_ocr:
-                tokens.extend(_extract_ocr(page, page_no))
-                methods.add("ocr")
-            else:
-                tokens.extend(_extract_text_layer(page, page_no))
-                methods.add("text_layer")
+        return _read_open_doc(doc, path.name, force_method)
     finally:
         doc.close()
 
-    method = methods.pop() if len(methods) == 1 else "mixed"
-    return ExtractedDocument(
-        file_name=path.name,
-        page_size_points=size,
-        method=method,
-        tokens=tokens,
-        watermark_terms=terms,
-    )
+
+def extract_bytes(data: bytes, file_name: str, force_method: str | None = None) -> ExtractedDocument:
+    """Read an uploaded PDF from memory, without touching disk."""
+    doc = fitz.open(stream=data, filetype="pdf")
+    try:
+        return _read_open_doc(doc, file_name, force_method)
+    finally:
+        doc.close()
 
 
 # Box geometry, used to check tokens against gold boxes
