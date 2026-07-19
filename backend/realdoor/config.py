@@ -31,6 +31,9 @@ DOCUMENT_GOLD_SCHEMA = SCHEMAS_ROOT / "document_gold.schema.json"
 # Where confirmed profiles are persisted (file-backed store; swap in config).
 STORE_DIR = REPO_ROOT / "out" / "store"
 
+# Stage 01 extraction output, consumed by Stage 02 (realdoor/rules).
+EXTRACTION_OUTPUT = REPO_ROOT / "out" / "extraction_output.json"
+
 
 def data_available() -> bool:
     """True when the vendored challenge data can be found."""

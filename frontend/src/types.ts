@@ -24,3 +24,58 @@ export interface Doc {
 export interface ExtractResponse {
   documents: Doc[]
 }
+
+// Shapes returned by the Stage 02 endpoints: /api/understand and /api/chat.
+
+export interface Citation {
+  document_id: string
+  file_name: string
+  page: number
+  bbox: [number, number, number, number]
+  rule_id: string
+}
+
+export interface IncomeSource {
+  document_id: string
+  file_name: string
+  document_type: string
+  gross_amount: number
+  frequency: string
+  multiplier: number
+  annualized: number
+  is_current: boolean
+  citation: Citation
+}
+
+export interface EnrichedProfile {
+  household_id: string
+  household_size: number
+  person_name: string
+  address: string
+  application_date: string
+  annualized_income: number
+  frozen_60_percent_threshold: number
+  comparison: 'below_or_equal' | 'above' | 'no_frozen_threshold'
+  threshold_pct_used: number
+  readiness_status: 'READY_TO_REVIEW' | 'NEEDS_REVIEW'
+  review_reasons: string[]
+  income_sources: IncomeSource[]
+  citations: Citation[]
+  calculation_steps: string[]
+  rule_versions_used: string[]
+  disclosure: string
+}
+
+export interface ChatMessage {
+  role: 'user' | 'assistant'
+  content: string
+  rule_ids_cited?: string[]
+  abstained?: boolean
+}
+
+export interface ChatResponse {
+  answer: string
+  rule_ids_cited: string[]
+  citations?: Citation[]
+  abstained: boolean
+}

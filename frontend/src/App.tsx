@@ -1,19 +1,30 @@
 import { useState } from 'react'
 import UploadForm from './components/UploadForm'
 import ConfirmView from './components/ConfirmView'
-import { extractDocuments } from './api'
-import type { Doc } from './types'
+import UnderstandView from './components/UnderstandView'
+import { extractDocuments, fetchUnderstand } from './api'
+import type { Doc, EnrichedProfile } from './types'
 
-type Stage = 'upload' | 'review'
+type Stage = 'upload' | 'review' | 'understand'
 
-const STEPS = ['Upload documents', 'Review & confirm', 'Prepare packet']
+const STEPS = ['Upload documents', 'Review & confirm', 'Understand & confirm', 'Prepare packet']
+
+// Documents are named hh-XXX_... in this challenge's synthetic dataset;
+// the household_id is that prefix, uppercased.
+function householdIdFromFileName(fileName: string): string | null {
+  const match = fileName.match(/^(hh-\d+)/i)
+  return match ? match[1].toUpperCase() : null
+}
 
 export default function App() {
   const [stage, setStage] = useState<Stage>('upload')
   const [documents, setDocuments] = useState<Doc[]>([])
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const stepIndex = stage === 'upload' ? 0 : 1
+  const [enrichedProfile, setEnrichedProfile] = useState<EnrichedProfile | null>(null)
+  const [householdId, setHouseholdId] = useState<string | null>(null)
+  const [understandLoading, setUnderstandLoading] = useState(false)
+  const stepIndex = stage === 'upload' ? 0 : stage === 'review' ? 1 : 2
 
   async function addFiles(files: File[]) {
     if (files.length === 0) return
@@ -31,6 +42,28 @@ export default function App() {
 
   function remove(index: number) {
     setDocuments((prev) => prev.filter((_, i) => i !== index))
+  }
+
+  async function onConfirmed(confirmedDocuments: Doc[]) {
+    const hhId = confirmedDocuments
+      .map((d) => householdIdFromFileName(d.file_name))
+      .find((id): id is string => id !== null)
+    if (!hhId) {
+      setError('Could not determine which household this application belongs to.')
+      return
+    }
+    setError(null)
+    setUnderstandLoading(true)
+    try {
+      const result = await fetchUnderstand(hhId)
+      setHouseholdId(hhId)
+      setEnrichedProfile(result)
+      setStage('understand')
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e))
+    } finally {
+      setUnderstandLoading(false)
+    }
   }
 
   return (
@@ -63,6 +96,7 @@ export default function App() {
 
       <main className="content">
         {error && <p role="alert" className="notice notice-error">{error}</p>}
+        {understandLoading && <p role="status" className="notice">Loading rules and thresholds…</p>}
 
         {stage === 'upload' && (
           <UploadForm
@@ -75,7 +109,11 @@ export default function App() {
         )}
 
         {stage === 'review' && (
-          <ConfirmView documents={documents} onBack={() => setStage('upload')} />
+          <ConfirmView documents={documents} onBack={() => setStage('upload')} onConfirmed={onConfirmed} />
+        )}
+
+        {stage === 'understand' && enrichedProfile && householdId && (
+          <UnderstandView profile={enrichedProfile} householdId={householdId} />
         )}
       </main>
     </div>

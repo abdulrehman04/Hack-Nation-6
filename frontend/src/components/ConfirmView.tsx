@@ -77,9 +77,10 @@ function CheckIcon() {
 interface Props {
   documents: Doc[]
   onBack: () => void
+  onConfirmed: (documents: Doc[]) => void
 }
 
-export default function ConfirmView({ documents, onBack }: Props) {
+export default function ConfirmView({ documents, onBack, onConfirmed }: Props) {
   const original = useMemo(() => {
     const o: Record<string, string> = {}
     documents.forEach((doc, di) => {
@@ -158,6 +159,7 @@ export default function ConfirmView({ documents, onBack }: Props) {
       const { profile_id } = await saveProfile(buildProfile())
       setSavedId(profile_id)
       setConfirmed(true)
+      onConfirmed(documents)
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
     } finally {
