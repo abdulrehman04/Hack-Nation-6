@@ -9,6 +9,7 @@ Stage 02 arithmetic or the Phase 2 chat context.
 from __future__ import annotations
 
 import json
+import re
 from dataclasses import dataclass, field
 
 from .. import config
@@ -69,6 +70,60 @@ def load_documents(path=None) -> list[Document]:
             contains_adversarial_text=record["contains_adversarial_text"],
             fields=confirmed,
             quarantined_count=quarantined_count,
+        ))
+    return documents
+
+
+# Building pipeline documents from a saved, renter-confirmed profile (Firestore)
+
+_INT_RE = re.compile(r"-?\d+")
+_FLOAT_RE = re.compile(r"-?\d*\.\d+")
+
+
+def _coerce(value):
+    """Turn a UI-edited numeric string back into a number; leave dates and text alone."""
+    if not isinstance(value, str):
+        return value
+    cleaned = value.strip().lstrip("$").replace(",", "")
+    if _INT_RE.fullmatch(cleaned):
+        return int(cleaned)
+    if _FLOAT_RE.fullmatch(cleaned):
+        return float(cleaned)
+    return value
+
+
+def documents_from_confirmed(household_id: str, stored_documents: list[dict]) -> list[Document]:
+    """Build pipeline Documents from a saved profile's confirmed fields (the source of truth).
+
+    Corrections live here, not in the frozen extraction file, so downstream math recomputes.
+    Quarantined fields never reach a saved profile, so nothing needs dropping.
+    """
+    documents = []
+    for index, stored in enumerate(stored_documents):
+        document_type = stored.get("document_type") or "unknown"
+        file_name = stored.get("file_name") or f"{household_id.lower()}-{document_type}-{index}"
+        confirmed: dict[str, dict] = {}
+        for entry in stored.get("fields", []):
+            name = entry.get("name")
+            value = entry.get("value")
+            if name is None or value is None:
+                continue
+            confirmed[name] = {
+                "field": name,
+                "value": _coerce(value),
+                "page": entry.get("page"),
+                "bbox": entry.get("bbox"),
+                "bbox_units": entry.get("bbox_units", "pdf_points_bottom_left_origin"),
+                "confidence": entry.get("confidence", 1.0),
+                "status": "extracted",
+            }
+        documents.append(Document(
+            document_id=f"{household_id.lower()}-{document_type}-{index}",
+            household_id=household_id,
+            document_type=document_type,
+            file_name=file_name,
+            contains_adversarial_text=False,
+            fields=confirmed,
         ))
     return documents
 

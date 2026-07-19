@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import type { ChecklistRow, PrepareDocument, PrepareData } from '../types'
 import { deleteSession, exportPacket } from '../api'
+import { getIdToken } from '../firebase'
 
 const DOC_LABELS: Record<string, string> = {
   application_summary: 'Application summary',
@@ -93,10 +94,11 @@ interface Props {
   data: PrepareData
   householdId: string
   onBack: () => void
+  onEdit: () => void
   onStartOver: () => void
 }
 
-export default function PrepareView({ data, householdId, onBack, onStartOver }: Props) {
+export default function PrepareView({ data, householdId, onBack, onEdit, onStartOver }: Props) {
   const [visibleDocuments, setVisibleDocuments] = useState(data.documents)
   const [exporting, setExporting] = useState(false)
   const [actionError, setActionError] = useState<string | null>(null)
@@ -109,7 +111,9 @@ export default function PrepareView({ data, householdId, onBack, onStartOver }: 
     setActionError(null)
     setExporting(true)
     try {
-      await exportPacket(householdId)
+      const token = await getIdToken()
+      if (!token) throw new Error('Please sign in again to export your packet.')
+      await exportPacket(householdId, token)
     } catch (e) {
       setActionError(e instanceof Error ? e.message : String(e))
     } finally {
@@ -163,7 +167,10 @@ export default function PrepareView({ data, householdId, onBack, onStartOver }: 
 
       {/* SECTION B — Your documents */}
       <div className="understand-card">
-        <h2>Your documents ({visibleDocuments.length})</h2>
+        <div className="section-head">
+          <h2>Your documents ({visibleDocuments.length})</h2>
+          <button type="button" className="btn-secondary btn-sm" onClick={onEdit}>Edit details</button>
+        </div>
         <p className="card-subtitle">
           Preview, edit, or remove any document before exporting. Nothing here is sent anywhere
           automatically.

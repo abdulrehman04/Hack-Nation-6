@@ -21,7 +21,13 @@ from .calculate import (
     percent_of_threshold,
 )
 from .corpus import cite, get_rules, load_rules
-from .grouper import Document, group_by_household, load_documents, load_households
+from .grouper import (
+    Document,
+    documents_from_confirmed,
+    group_by_household,
+    load_documents,
+    load_households,
+)
 from .pipeline import build_profile, run_all, run_household
 from .qa import FALLBACK_MESSAGE, answer_question, build_prompt
 
@@ -42,6 +48,7 @@ __all__ = [
     "get_rules",
     "cite",
     "Document",
+    "documents_from_confirmed",
     "load_documents",
     "group_by_household",
     "load_households",

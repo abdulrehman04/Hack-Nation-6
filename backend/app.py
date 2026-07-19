@@ -26,12 +26,13 @@ from realdoor.auth import AuthError, verify_id_token  # noqa: E402
 from realdoor.extraction.assembly import LABELS, assemble  # noqa: E402
 from realdoor.extraction.classify import detect_document_type  # noqa: E402
 from realdoor.extraction.readers import extract_bytes, render_first_page  # noqa: E402
-from realdoor.rules import answer_question, build_profile, load_households, run_household  # noqa: E402
+from realdoor.rules import answer_question, build_profile, documents_from_confirmed  # noqa: E402
 from realdoor.rules import corpus  # noqa: E402
 from realdoor.packet import build_checklist, build_packet  # noqa: E402
 from realdoor.packet import delete_session as delete_household_session  # noqa: E402
 from realdoor.packet import is_session_deleted  # noqa: E402
 from realdoor.storage import get_store  # noqa: E402
+from realdoor.storage.base import household_id_from_documents  # noqa: E402
 
 app = FastAPI(title="RealDoor extraction API")
 
@@ -105,6 +106,9 @@ class StoredField(BaseModel):
     confidence: float | None = None
     source_method: str | None = None
     reviewed: bool = True
+    page: int | None = None
+    bbox: list[float] | None = None
+    bbox_units: str | None = None
 
 
 class StoredDocument(BaseModel):
@@ -146,22 +150,52 @@ def _require_uid(authorization: str | None) -> str:
         raise HTTPException(401, f"authentication failed: {exc}") from None
 
 
+def _owner_confirmed_profile(uid: str) -> tuple[str, list]:
+    """Load the signed-in user's saved profile from storage and build pipeline documents.
+
+    This is the single source of truth for Stage 2/3: renter corrections persisted here
+    drive every downstream number. Nothing reads the frozen extraction file at request time.
+    """
+    store = get_store()
+    summary = next((s for s in store.list_summaries() if s.get("owner_uid") == uid), None)
+    if summary is None:
+        raise HTTPException(404, "No saved profile for this account yet.")
+    record = store.get(summary["profile_id"])
+    if record is None:
+        raise HTTPException(404, "No saved profile for this account yet.")
+    household_id = record.get("household_id") or household_id_from_documents(record.get("documents"))
+    if not household_id:
+        raise HTTPException(422, "Saved profile has no household id.")
+    documents = documents_from_confirmed(household_id, record.get("documents", []))
+    return household_id, documents
+
+
 @app.post("/profiles")
 def create_profile(profile: ConfirmedProfile, authorization: str | None = Header(None)) -> dict:
-    """Persist a renter-confirmed profile against the signed-in user."""
+    """Save a renter-confirmed profile. One profile per user: re-saving updates it."""
     uid = _require_uid(authorization)
     if not (profile.consent and profile.consent.get("consented")):
         raise HTTPException(400, "consent is required to save")
 
+    store = get_store()
+    now = datetime.now(timezone.utc).isoformat()
     record = profile.model_dump()
     record["owner_uid"] = uid
     record["rule_versions"] = _rule_versions()
-    record["audit"] = [*record.get("audit", []), {
-        "action": "stored",
-        "at": datetime.now(timezone.utc).isoformat(),
-    }]
+
+    # Update in place if this user already has a profile, so edits don't duplicate.
+    existing = next((s for s in store.list_summaries() if s.get("owner_uid") == uid), None)
+    if existing:
+        prior = store.get(existing["profile_id"]) or {}
+        record["profile_id"] = existing["profile_id"]
+        record["created_at"] = prior.get("created_at")
+        record["updated_at"] = now
+        record["audit"] = [*prior.get("audit", []), *record.get("audit", []), {"action": "edited", "at": now}]
+    else:
+        record["audit"] = [*record.get("audit", []), {"action": "stored", "at": now}]
+
     try:
-        profile_id = get_store().save(record)
+        profile_id = store.save(record)
     except Exception as exc:  # storage backend failed; surface it cleanly
         raise HTTPException(502, f"Could not save profile: {exc}") from None
     return {"profile_id": profile_id, "saved": True}
@@ -201,13 +235,12 @@ def _require_active_session(household_id: str) -> None:
 
 
 @app.get("/api/understand/{household_id}")
-def understand(household_id: str) -> dict:
-    """Run the Stage 02 Phase 1 calculation engine and return the cited enriched profile."""
-    _require_active_session(household_id)
-    try:
-        return run_household(household_id)
-    except KeyError:
-        raise HTTPException(404, f"Unknown household_id: {household_id}")
+def understand(household_id: str, authorization: str | None = Header(None)) -> dict:
+    """Run the Stage 02 Phase 1 calculation engine over the renter's confirmed profile."""
+    uid = _require_uid(authorization)
+    hh_id, documents = _owner_confirmed_profile(uid)
+    _require_active_session(hh_id)
+    return build_profile(hh_id, documents)
 
 
 class ChatRequest(BaseModel):
@@ -217,22 +250,13 @@ class ChatRequest(BaseModel):
 
 
 @app.post("/api/chat")
-def chat(request: ChatRequest) -> dict:
-    """Answer a grounded, safety-checked question about one household's Phase 1 profile."""
-    _require_active_session(request.household_id)
-    try:
-        profile = run_household(request.household_id)
-    except KeyError:
-        raise HTTPException(404, f"Unknown household_id: {request.household_id}")
+def chat(request: ChatRequest, authorization: str | None = Header(None)) -> dict:
+    """Answer a grounded, safety-checked question about the renter's confirmed profile."""
+    uid = _require_uid(authorization)
+    hh_id, documents = _owner_confirmed_profile(uid)
+    _require_active_session(hh_id)
+    profile = build_profile(hh_id, documents)
     return answer_question(profile, request.question)
-
-
-def _load_household_documents(household_id: str) -> list:
-    households = load_households()
-    documents = households.get(household_id)
-    if documents is None:
-        raise HTTPException(404, f"Unknown household_id: {household_id}")
-    return documents
 
 
 def _serialize_document(doc) -> dict:
@@ -245,10 +269,11 @@ def _serialize_document(doc) -> dict:
 
 
 @app.get("/api/prepare/{household_id}")
-def prepare(household_id: str) -> dict:
+def prepare(household_id: str, authorization: str | None = Header(None)) -> dict:
     """Run the Stage 03 checklist against the confirmed profile and return packet data for the UI."""
+    uid = _require_uid(authorization)
+    household_id, documents = _owner_confirmed_profile(uid)
     _require_active_session(household_id)
-    documents = _load_household_documents(household_id)
     profile = build_profile(household_id, documents)
     checklist = build_checklist(household_id, documents)["checklist"]
 
@@ -271,13 +296,14 @@ def prepare(household_id: str) -> dict:
 
 
 @app.post("/api/export/{household_id}")
-def export(household_id: str) -> JSONResponse:
+def export(household_id: str, authorization: str | None = Header(None)) -> JSONResponse:
     """Assemble the final Stage 03 packet and return it as a downloadable JSON file.
 
     Only ever returned to the renter's own request — never sent anywhere else.
     """
+    uid = _require_uid(authorization)
+    household_id, documents = _owner_confirmed_profile(uid)
     _require_active_session(household_id)
-    documents = _load_household_documents(household_id)
     profile = build_profile(household_id, documents)
     checklist = build_checklist(household_id, documents)["checklist"]
     packet = build_packet(household_id, profile, checklist)

@@ -51,7 +51,7 @@ export default function App() {
         setView('account') // signed in, but no dashboard data yet
         return
       }
-      const result = await fetchUnderstand(hhId)
+      const result = await fetchUnderstand(hhId, token!)
       setHouseholdId(hhId)
       setEnrichedProfile(result)
       setView('understand')
@@ -136,7 +136,7 @@ export default function App() {
     }
   }
 
-  // After a new user saves and creates an account, open their dashboard.
+  // After a save (or edit re-save), keep the confirmed values and open the dashboard.
   async function afterSaved(confirmedDocuments: Doc[]) {
     const hhId = confirmedDocuments
       .map((d) => householdIdFromFileName(d.file_name))
@@ -145,10 +145,13 @@ export default function App() {
       setError('Could not determine which household this application belongs to.')
       return
     }
+    setDocuments(confirmedDocuments)
     setError(null)
     setUnderstandLoading(true)
     try {
-      const result = await fetchUnderstand(hhId)
+      const token = await getIdToken()
+      if (!token) throw new Error('Please sign in again to view your dashboard.')
+      const result = await fetchUnderstand(hhId, token)
       setHouseholdId(hhId)
       setEnrichedProfile(result)
       setView('understand')
@@ -159,12 +162,44 @@ export default function App() {
     }
   }
 
+  function editFromPrepare() {
+    setError(null)
+    if (documents.length > 0) {
+      setView('review')
+      return
+    }
+    // Returning user: no uploads in memory, so rebuild editable docs from the packet.
+    if (!prepareData) return
+    const reconstructed: Doc[] = prepareData.documents.map((d) => ({
+      file_name: d.file_name,
+      document_type: d.document_type,
+      detected: true,
+      method: 'text_layer',
+      injected_instruction: null,
+      page_image: '',
+      page_size_points: [612, 792],
+      fields: d.fields.map((f) => ({
+        name: f.field,
+        value: f.value,
+        confidence: f.confidence,
+        source_method: null,
+        source_bbox: f.bbox,
+        status: f.status,
+        reason: null,
+      })),
+    }))
+    setDocuments(reconstructed)
+    setView('review')
+  }
+
   async function onContinueToPrepare() {
     if (!householdId) return
     setError(null)
     setPrepareLoading(true)
     try {
-      const result = await fetchPrepare(householdId)
+      const token = await getIdToken()
+      if (!token) throw new Error('Please sign in again to prepare your packet.')
+      const result = await fetchPrepare(householdId, token)
       setPrepareData(result)
       setView('prepare')
     } catch (e) {
@@ -269,6 +304,7 @@ export default function App() {
                 data={prepareData}
                 householdId={householdId}
                 onBack={() => setView('understand')}
+                onEdit={editFromPrepare}
                 onStartOver={startNew}
               />
             )}

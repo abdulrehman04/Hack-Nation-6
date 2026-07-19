@@ -90,8 +90,9 @@ class FirestoreProfileStore(ProfileStore):
             "status": "confirmed",
             **profile,
         }
-        url = f"{self._docs}/{self.collection}?documentId={profile_id}&key={self.api_key}"
-        self._request("POST", url, {"fields": to_fields(record)})
+        # PATCH creates-or-updates (upsert); POST createDocument would 409 on an existing id.
+        url = f"{self._docs}/{self.collection}/{profile_id}?key={self.api_key}"
+        self._request("PATCH", url, {"fields": to_fields(record)})
         return profile_id
 
     def get(self, profile_id: str) -> dict | None:

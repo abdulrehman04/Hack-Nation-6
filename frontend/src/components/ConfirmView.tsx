@@ -4,7 +4,7 @@ import type { AuditEvent, Doc, Field } from '../types'
 import { runSanityChecks } from '../sanity'
 import { saveProfile } from '../api'
 import AuthModal from './AuthModal'
-import type { AuthedUser } from '../firebase'
+import { getIdToken } from '../firebase'
 
 const HOUSEHOLD_FIELDS = ['person_name', 'household_size', 'address']
 
@@ -183,13 +183,28 @@ export default function ConfirmView({ documents, audit, onBack, onSaved }: Props
     return { household_id: householdId, household, documents: docs, sanity_issues: issues, consent, audit: auditLog }
   }
 
-  async function saveForUser(user: AuthedUser) {
+  // Save directly when already signed in; only new users go through the modal.
+  async function proceedToSave() {
+    const token = await getIdToken()
+    if (token) {
+      saveWithToken(token)
+    } else {
+      setShowAuth(true)
+    }
+  }
+
+  async function saveWithToken(idToken: string) {
     setShowAuth(false)
     setSaving(true)
     try {
-      await saveProfile(buildProfile(), user.idToken)
+      await saveProfile(buildProfile(), idToken)
       setConfirmed(true)
-      onSaved(documents)
+      const confirmedDocs = documents.map((doc, di) => ({
+        ...doc,
+        fields: doc.fields.map((f) =>
+          f.name === INJECTION_FIELD ? f : { ...f, value: values[`${di}:${f.name}`] ?? f.value }),
+      }))
+      onSaved(confirmedDocs)
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
     } finally {
@@ -219,13 +234,13 @@ export default function ConfirmView({ documents, audit, onBack, onSaved }: Props
     }
     setError(null)
     if (checked && issues.length > 0) {
-      setShowAuth(true) // second click: proceed despite the flagged issues
+      proceedToSave() // second click: proceed despite the flagged issues
       return
     }
     const found = runSanityChecks(documents, values)
     setIssues(found)
     setChecked(true)
-    if (found.length === 0) setShowAuth(true)
+    if (found.length === 0) proceedToSave()
   }
 
   const primaryLabel = saving
@@ -271,7 +286,8 @@ export default function ConfirmView({ documents, audit, onBack, onSaved }: Props
               </p>
             )}
 
-            <div className="doc-body">
+            <div className={doc.page_image ? 'doc-body' : 'doc-body doc-body-noimg'}>
+              {doc.page_image && (
               <div className="doc-preview">
                 <div className="preview-frame">
                   <img src={doc.page_image} alt={`Document: ${doc.file_name}`} />
@@ -305,6 +321,7 @@ export default function ConfirmView({ documents, audit, onBack, onSaved }: Props
                   )}
                 </div>
               </div>
+              )}
 
               <dl className="field-list">
                 {fields.map((f) => {
@@ -403,7 +420,10 @@ export default function ConfirmView({ documents, audit, onBack, onSaved }: Props
       )}
 
       {showAuth && (
-        <AuthModal onClose={() => setShowAuth(false)} onAuthenticated={saveForUser} />
+        <AuthModal
+          onClose={() => setShowAuth(false)}
+          onAuthenticated={(user) => saveWithToken(user.idToken)}
+        />
       )}
     </section>
   )

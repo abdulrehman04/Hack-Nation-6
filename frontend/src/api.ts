@@ -68,24 +68,27 @@ export async function deleteMyData(idToken: string): Promise<{ deleted: number }
   return res.json()
 }
 
-// Phase 1: fetch the enriched, cited profile for one household.
-export async function fetchUnderstand(householdId: string): Promise<EnrichedProfile> {
-  const res = await fetch(`${API_BASE}/api/understand/${householdId}`)
+// Phase 1: fetch the enriched, cited profile computed from the signed-in user's saved data.
+export async function fetchUnderstand(householdId: string, idToken: string): Promise<EnrichedProfile> {
+  const res = await fetch(`${API_BASE}/api/understand/${householdId}`, {
+    headers: { Authorization: `Bearer ${idToken}` },
+  })
   if (!res.ok) {
     throw new Error(`Understand failed (${res.status}): ${await res.text()}`)
   }
   return res.json()
 }
 
-// Phase 2: ask a grounded question about one household's profile.
+// Phase 2: ask a grounded question about the signed-in user's saved profile.
 export async function sendChat(
   householdId: string,
   question: string,
   conversationHistory: ChatMessage[],
+  idToken: string,
 ): Promise<ChatResponse> {
   const res = await fetch(`${API_BASE}/api/chat`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${idToken}` },
     body: JSON.stringify({
       household_id: householdId,
       question,
@@ -98,9 +101,11 @@ export async function sendChat(
   return res.json()
 }
 
-// Phase 3: checklist + packet data for the prepare/export/delete step.
-export async function fetchPrepare(householdId: string): Promise<PrepareData> {
-  const res = await fetch(`${API_BASE}/api/prepare/${householdId}`)
+// Phase 3: checklist + packet data computed from the signed-in user's saved data.
+export async function fetchPrepare(householdId: string, idToken: string): Promise<PrepareData> {
+  const res = await fetch(`${API_BASE}/api/prepare/${householdId}`, {
+    headers: { Authorization: `Bearer ${idToken}` },
+  })
   if (!res.ok) {
     throw new Error(`Prepare failed (${res.status}): ${await res.text()}`)
   }
@@ -108,8 +113,11 @@ export async function fetchPrepare(householdId: string): Promise<PrepareData> {
 }
 
 // Assembles the final packet server-side and triggers a browser download of it.
-export async function exportPacket(householdId: string): Promise<void> {
-  const res = await fetch(`${API_BASE}/api/export/${householdId}`, { method: 'POST' })
+export async function exportPacket(householdId: string, idToken: string): Promise<void> {
+  const res = await fetch(`${API_BASE}/api/export/${householdId}`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${idToken}` },
+  })
   if (!res.ok) {
     throw new Error(`Export failed (${res.status}): ${await res.text()}`)
   }

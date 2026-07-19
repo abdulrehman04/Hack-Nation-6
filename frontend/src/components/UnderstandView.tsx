@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import type { FormEvent } from 'react'
 import type { ChatMessage, EnrichedProfile } from '../types'
 import { sendChat } from '../api'
+import { getIdToken } from '../firebase'
 
 const SUGGESTIONS = [
   'What is my annualized income?',
@@ -73,7 +74,9 @@ export default function UnderstandView({ profile, householdId, onContinue }: Pro
     setMessages((prev) => [...prev, { role: 'user', content: text }])
     setLoading(true)
     try {
-      const res = await sendChat(householdId, text, history)
+      const token = await getIdToken()
+      if (!token) throw new Error('Please sign in again to ask a question.')
+      const res = await sendChat(householdId, text, history, token)
       setMessages((prev) => [
         ...prev,
         { role: 'assistant', content: res.answer, rule_ids_cited: res.rule_ids_cited, abstained: res.abstained },
