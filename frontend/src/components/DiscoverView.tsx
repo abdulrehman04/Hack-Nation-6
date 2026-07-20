@@ -25,6 +25,35 @@ function bedroomSummary(p: Property): string {
   return parts.length ? parts.join(' · ') : 'Unit mix not reported'
 }
 
+// Keyless location preview: OpenStreetMap embed with a pin; the button opens
+// Google Maps in a new tab, pin pre-placed at the exact coordinates.
+function PropertyMap({ lat, lon, name, precise, precisionCode }: {
+  lat: number; lon: number; name: string; precise: boolean; precisionCode: string
+}) {
+  const bbox = `${lon - 0.006},${lat - 0.004},${lon + 0.006},${lat + 0.004}`
+  const embed = `https://www.openstreetmap.org/export/embed.html?bbox=${bbox}&layer=mapnik&marker=${lat},${lon}`
+  const gmaps = `https://www.google.com/maps/search/?api=1&query=${lat},${lon}`
+  return (
+    <div className="property-map">
+      <iframe
+        className="property-map-frame"
+        title={`Map showing ${titleCase(name)}`}
+        loading="lazy"
+        referrerPolicy="no-referrer-when-downgrade"
+        src={embed}
+      />
+      <div className="property-map-row">
+        <a className="btn-secondary btn-sm" href={gmaps} target="_blank" rel="noopener noreferrer">
+          Open in Google Maps ↗
+        </a>
+        {!precise && (
+          <span className="muted property-map-note">Approximate location (geocode precision {precisionCode}).</span>
+        )}
+      </div>
+    </div>
+  )
+}
+
 // Detail popup. Read-only; a source link is the only outbound action, opened by the renter.
 function PropertyModal({ property, notice, onClose }: { property: Property; notice: string; onClose: () => void }) {
   useEffect(() => {
@@ -66,6 +95,16 @@ function PropertyModal({ property, notice, onClose }: { property: Property; noti
           <div><dt>Metro (CBSA)</dt><dd>{property.cbsa_name}</dd></div>
           <div><dt>HUD ID</dt><dd>{property.hud_id}</dd></div>
         </dl>
+
+        {property.latitude != null && property.longitude != null && (
+          <PropertyMap
+            lat={property.latitude}
+            lon={property.longitude}
+            name={property.project_name}
+            precise={property.geocode_precision_code === 'R' || property.geocode_precision_code === '4'}
+            precisionCode={property.geocode_precision_code}
+          />
+        )}
 
         {property.data_quality_flags.length > 0 && (
           <p className="discover-flags">

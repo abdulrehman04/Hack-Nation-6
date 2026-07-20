@@ -8,7 +8,8 @@ import type {
   PrepareData,
 } from './types'
 
-const API_BASE = import.meta.env.VITE_API_BASE ?? 'http://127.0.0.1:8000'
+// Production build talks to the same origin (FastAPI serves this bundle); dev hits local uvicorn.
+const API_BASE = import.meta.env.VITE_API_BASE ?? (import.meta.env.PROD ? '' : 'http://127.0.0.1:8000')
 
 // Send PDFs; the backend detects each document's type and returns its fields.
 export async function extractDocuments(files: File[]): Promise<ExtractResponse> {

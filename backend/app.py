@@ -18,7 +18,8 @@ from typing import Any  # noqa: E402
 
 from fastapi import FastAPI, File, Header, HTTPException, UploadFile  # noqa: E402
 from fastapi.middleware.cors import CORSMiddleware  # noqa: E402
-from fastapi.responses import JSONResponse  # noqa: E402
+from fastapi.responses import FileResponse, JSONResponse  # noqa: E402
+from fastapi.staticfiles import StaticFiles  # noqa: E402
 from pydantic import BaseModel  # noqa: E402
 
 from realdoor import config  # noqa: E402
@@ -333,3 +334,17 @@ def discover() -> dict:
         "availability_notice": AVAILABILITY_NOTICE,
         "data_notice": DATA_NOTICE,
     }
+
+
+# Serve the built frontend from the same origin in production (Railway image copies
+# the Vite build to ./webdist). Declared last so it never shadows the API routes above.
+_WEB_DIR = Path(__file__).resolve().parent / "webdist"
+if _WEB_DIR.is_dir():
+    app.mount("/assets", StaticFiles(directory=_WEB_DIR / "assets"), name="assets")
+
+    @app.get("/{full_path:path}", include_in_schema=False)
+    def serve_spa(full_path: str) -> FileResponse:
+        candidate = _WEB_DIR / full_path
+        if full_path and candidate.is_file():
+            return FileResponse(candidate)
+        return FileResponse(_WEB_DIR / "index.html")
